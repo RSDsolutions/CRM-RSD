@@ -2,7 +2,7 @@
 
 **Documento de Estado Técnico, Arquitectura y Registro Funcional**  
 **Fecha de Auditoría:** 21 de Septiembre de 2026  
-**Versión del Sistema:** 1.0.0 (Producción / Estable)  
+**Versión del Sistema:** 1.2.0 (Fase 1 y 2 - Evolución a Plataforma Comercial)  
 **Organización:** RSD Solutions  
 **Repositorio GitHub:** [https://github.com/RSDsolutions/CRM-RSD](https://github.com/RSDsolutions/CRM-RSD)  
 **ID del Proyecto Supabase:** `gzgdilrlzqitsprhqcld`
@@ -10,7 +10,9 @@
 ---
 
 ## 1. Resumen Ejecutivo
-El **Mini-CRM de RSD Solutions** es una plataforma web interna diseñada para la gestión, seguimiento y prospección comercial de leads calificados provenientes de pauta publicitaria. El sistema permite a los asesores comerciales ingresar prospectos de forma estandarizada y al Administrador supervisar el pipeline en tiempo real mediante un tablero visual Kanban interactivo con soporte de Drag & Drop y actualización optimista.
+El **CRM de RSD Solutions** es una plataforma web interna diseñada para la gestión integral del ciclo de vida del cliente. Comenzó como un MVP para captura de prospectos y ha evolucionado hacia un ERP comercial completo que cubre: Prospección (Leads), Demostraciones de Producto, Cotizaciones y Propuestas Comerciales, Conversión a Clientes y Gestión de Proyectos en ejecución. 
+
+Todo el sistema está soportado por un robusto modelo relacional en PostgreSQL, RBAC (Role-Based Access Control) y trazabilidad completa de auditoría, manteniendo una interfaz minimalista, veloz e intuitiva para los asesores comerciales.
 
 ---
 
@@ -32,170 +34,106 @@ El **Mini-CRM de RSD Solutions** es una plataforma web interna diseñada para la
 
 ---
 
-## 3. Arquitectura del Código Fuente
+## 3. Arquitectura del Código Fuente (Evolucionada)
 
 ```text
 CRM-RSD/
 ├── app/
-│   ├── layout.tsx                # Layout principal con Navbar persistente y configuración de fuentes
-│   ├── globals.css               # Estilos globales, variables de color CSS y scrollbars personalizadas
-│   ├── page.tsx                  # Vista principal: Servidor SSR que consulta leads y renderiza Kanban
-│   ├── login/
-│   │   └── page.tsx              # Vista de autenticación con credenciales Supabase Auth
-│   └── nuevo-lead/
-│       └── page.tsx              # Vista de ingreso de prospectos con validación Zod y DatePicker
+│   ├── (dashboard)/              # Rutas protegidas (Agrupación lógica)
+│   │   ├── clientes/             # Módulo de Directorio de Clientes
+│   │   ├── comercial/            # Módulo Comercial (Demos y Propuestas)
+│   │   ├── proyectos/            # Módulo Operativo de Proyectos
+│   │   └── page.tsx              # Vista Kanban principal de Leads
+│   ├── actions/                  # Server Actions (Mutaciones)
+│   │   ├── clients.ts
+│   │   ├── demos.ts
+│   │   ├── proposals.ts
+│   │   └── projects.ts
+│   ├── layout.tsx                # Layout principal con Navbar dinámico (Roles)
+│   ├── login/                    # Autenticación
+│   └── nuevo-lead/               # Ingreso de prospectos
 ├── components/
-│   ├── navbar.tsx                # Barra de navegación superior con sesión activa, logo y logout
-│   └── kanban/
-│       ├── kanban-board.tsx      # Contenedor central DndContext, lógica optimista y rollback
-│       ├── lead-card.tsx         # Tarjeta arrastrable con cálculo de urgencia (hoy/vencido en rojo)
-│       └── lead-detail-sheet.tsx # Panel lateral deslizante para auditoría y edición de bitácora
+│   ├── clients/                  # Componentes UI de Clientes
+│   ├── demos/                    # Componentes UI de Demos
+│   ├── kanban/                   # Tablero Kanban Drag&Drop
+│   ├── proposals/                # Componentes UI de Propuestas
+│   ├── projects/                 # Componentes UI de Proyectos
+│   └── navbar.tsx                # Barra superior con navegación por módulos y RBAC
 ├── types/
-│   └── database.types.ts         # Definiciones TypeScript de entidades y enumeraciones de base de datos
+│   └── database.types.ts         # Definiciones TypeScript de entidades actualizadas
 ├── utils/
-│   └── supabase/
-│       ├── client.ts             # Cliente de Supabase para Client Components (createBrowserClient)
-│       └── server.ts             # Cliente de Supabase para Server Components y Server Actions
-├── middleware.ts                 # Interceptor de rutas para refresco de tokens y redirección a /login
-├── supabase/
-│   ├── config.toml               # Configuración del CLI de Supabase
-│   └── schema.sql                # Script DDL declarativo de creación de tablas, ENUMs y RLS
-├── .env.local                    # Credenciales activas locales (ignorado por Git)
-├── .env.example                  # Plantilla de variables sin valores sensibles
-├── .gitignore                    # Reglas de exclusión de Git (node_modules, .env, .temp)
-├── package.json                  # Definición de dependencias y scripts de ejecución
-├── tsconfig.json                 # Configuración de compilador TypeScript y alias de importación (@/*)
-└── tailwind.config.ts            # Configuración de temas, colores y rutas de purgado CSS
+│   ├── auth/
+│   │   └── roles.ts              # Utilidades para roles y RBAC
+│   └── supabase/                 # Clientes Supabase SSR
+├── middleware.ts                 # Interceptor de sesión y redirecciones
+└── supabase/migrations/          # Archivos SQL de evolución de Base de Datos
 ```
 
 ---
 
-## 4. Base de Datos y Seguridad (Supabase PostgreSQL)
+## 4. Modelo de Base de Datos y Seguridad (PostgreSQL)
 
-### A. Tipos Enumerados (`ENUM`)
-1. **`software_type_enum`:**
-   - Valores permitidos: `'Web App'`, `'Mobile App'`, `'E-commerce'`, `'ERP/CRM'`, `'Landing Page'`, `'Otro'`.
-2. **`lead_status_enum`:**
-   - Valores permitidos: `'Nuevo'`, `'Contactado'`, `'Cita Agendada'`, `'Propuesta'`, `'Negociación'`, `'Cerrado-Ganado'`, `'Cerrado-Perdido'`.
+El sistema ha evolucionado de una única tabla `leads` a un esquema normalizado completo para gestión comercial.
 
-### B. Tabla Principal: `public.leads`
-| Campo | Tipo SQL | Restricciones | Descripción |
-| :--- | :--- | :--- | :--- |
-| `id` | `UUID` | `PRIMARY KEY, DEFAULT gen_random_uuid()` | Identificador único universal |
-| `company_name` | `TEXT` | `NOT NULL` | Razón social o nombre comercial |
-| `contact_name` | `TEXT` | `NOT NULL` | Nombre y apellido del contacto clave |
-| `software_type` | `software_type_enum` | `NOT NULL` | Tipo de solución tecnológica buscada |
-| `interaction_log`| `TEXT` | `NOT NULL` | Bitácora de requerimientos, objeciones y notas |
-| `appointment_scheduled` | `BOOLEAN` | `NOT NULL, DEFAULT false` | Indicador si se coordinó reunión de diagnóstico |
-| `appointment_date` | `TIMESTAMPTZ` | `NULLABLE` | Fecha y hora pactada para la cita |
-| `status` | `lead_status_enum` | `NOT NULL, DEFAULT 'Nuevo'` | Estado comercial dentro del pipeline Kanban |
-| `assigned_to` | `TEXT` | `NOT NULL` | Nombre del asesor comercial responsable |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL, DEFAULT now()` | Fecha de registro inicial |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL, DEFAULT now()` | Fecha de última modificación |
+### A. Tipos Enumerados (`ENUM`) Actualizados
+1. **`lead_status_enum`:**
+   - Flujo comercial: `Nuevo`, `Contactado`, `Diagnóstico`, `Demo`, `Feedback Demo`, `Propuesta`, `Negociación`, `Aprobado`, `Convertido`, `Cerrado-Perdido`, `Perdido`
+   - *Legado (por compatibilidad)*: `Cita Agendada`, `Cerrado-Ganado`.
 
-### C. Índices y Triggers
-- **Índice `idx_leads_status`:** Optimiza el agrupamiento por columnas en el tablero Kanban.
-- **Índice `idx_leads_created_at`:** Acelera la ordenación cronológica descendente.
-- **Trigger `trigger_set_leads_updated_at`:** Ejecuta la función `public.handle_updated_at()` antes de cada `UPDATE` para mantener sincronizado `updated_at`.
+### B. Entidades Principales
+1. **`leads`**: Prospectos ingresados. Mantiene el pipeline inicial. Al llegar a "Aprobado" y firmar propuesta, se convierten a `clients`.
+2. **`profiles`**: Extensión de `auth.users` para manejar metadatos, nombres y Roles (`admin` | `comercial`).
+3. **`clients` & `client_contacts`**: Directorio formal de empresas o personas que ya son clientes activos.
+4. **`demos` & `demo_feedback`**: Registro de presentaciones de software a prospectos o clientes. Historial inmutable de feedback por demo.
+5. **`proposals`**: Cotizaciones formales. Autogeneran su correlativo (`RSD-PROP-2026-001`). Al aceptarse, disparan la creación automática de un Proyecto y un Cliente (si el origen era un lead).
+6. **`projects`**: Trabajos de desarrollo en ejecución, con control de estados, fechas de inicio/entrega y enlaces a repositorios y producción.
+7. **`audit_logs`**: Tabla de trazabilidad. Un trigger de BD registra automáticamente todos los eventos de `INSERT`, `UPDATE` o `DELETE` de casi todas las entidades, guardando el autor, tabla y el diff de datos modificado.
 
-### D. Políticas de Seguridad RLS (Row Level Security)
-La tabla `public.leads` tiene RLS habilitado de forma estricta. Todo acceso anónimo es bloqueado por defecto.
-- `SELECT`: Permitido únicamente a usuarios con rol `authenticated`.
-- `INSERT`: Permitido únicamente a usuarios con rol `authenticated`.
-- `UPDATE`: Permitido únicamente a usuarios con rol `authenticated`.
-- `DELETE`: Permitido únicamente a usuarios con rol `authenticated`.
+### C. Políticas de Seguridad (RBAC y RLS)
+- **RLS (Row Level Security):** Activo en todas las tablas.
+- Todo acceso anónimo está bloqueado.
+- Las lecturas, inserciones y actualizaciones están permitidas a usuarios autenticados, pero la lógica de la UI y los Server Actions controlan los flujos.
+- **`DELETE`**: Eliminaciones físicas en tablas como `clients`, `proposals` o `projects` están estrictamente restringidas solo a usuarios con rol `admin` (`public.get_user_role() = 'admin'`).
 
 ---
 
 ## 5. Vistas y Módulos del Sistema
 
-### 1. Módulo de Autenticación (`/login`)
-- **Acceso:** Público (usuarios ya autenticados son redirigidos automáticamente al Dashboard `/`).
-- **Mecanismo:** Supabase Auth (`signInWithPassword`).
-- **Seguridad:** Cookies seguras gestionadas por `@supabase/ssr`.
-- **UI:** Interfaz oscura minimalista con validación de inputs, feedback de carga (`Loader2`) y mensajes de error descriptivos.
+### 1. Tablero Comercial Kanban (Leads)
+- Mantiene toda la robustez del Drag&Drop optimista original.
+- Adaptado para mostrar las nuevas columnas de pipeline (`Diagnóstico`, `Demo`, `Propuesta`, etc.).
+- Permite la visualización rápida de leads y su gestión hasta la conversión.
 
-### 2. Tablero Kanban (`/`)
-- **Acceso:** Protegido por Middleware (requiere sesión activa).
-- **Columnas agrupadas por estado:**
-  1. *Nuevo* (Indicador azul)
-  2. *Contactado* (Indicador amarillo)
-  3. *Cita Agendada* (Indicador violeta)
-  4. *Propuesta* (Indicador cian)
-  5. *Negociación* (Indicador ámbar)
-  6. *Cerrado-Ganado* (Indicador verde esmeralda)
-  7. *Cerrado-Perdido* (Indicador rojo rosa)
-- **Comportamiento Drag & Drop:**
-  - Sensor de puntero con tolerancia de 5px de distancia para evitar arrastres involuntarios al hacer clic.
-  - **Actualización Optimista:** Al soltar la tarjeta, el estado local de React se actualiza de inmediato sin esperar al servidor.
-  - **Persistencia Asíncrona:** Se dispara la mutación a Supabase (`update({ status })`). En caso de error de red, el sistema ejecuta un rollback al estado previo y muestra una alerta visual.
-- **Botón de Refresco Manual:** Permite sincronizar el tablero con la base de datos sin recargar la página completa.
+### 2. Módulo Comercial (Demos y Propuestas)
+- **Demos:** Permite registrar demostraciones asociadas a Leads o Clientes. Cada demo tiene una bitácora de feedback asociada para rastrear objeciones o comentarios del prospecto post-presentación.
+- **Propuestas:** Cotizaciones con precio base y descuento.
+  - Flujo automatizado: Al cambiar una propuesta al estado **"Aceptada"**, el sistema automáticamente (mediante Server Actions):
+    1. Convierte el Lead a un Cliente en el directorio.
+    2. Crea un Proyecto asignado a ese cliente, migrando el presupuesto y el alcance.
 
-### 3. Tarjeta de Prospecto (`LeadCard`)
-- **Datos visibles:** Nombre de la empresa, badge del tipo de software, nombre del contacto y asesor asignado.
-- **Alertas Visuales de Cita:**
-  - Si no tiene cita: no muestra badge adicional.
-  - Si la cita es hoy o ya venció: Badge rojo pulsante (`animate-pulse`) con icono de alerta (`AlertTriangle`).
-  - Si la cita es a futuro: Badge índigo/azul con icono de reloj y formato amigable en español.
-- **Interacción:** Un clic sobre la tarjeta abre el panel lateral de auditoría y edición.
+### 3. Módulo de Directorio de Clientes
+- Vista en tabla y vista de perfil (Profile) para cada cliente.
+- Manejo de información fiscal, múltiples contactos (`client_contacts`) y notas.
 
-### 4. Panel Lateral de Detalle (`LeadDetailSheet`)
-- **Componente:** Panel deslizable tipo Sheet (animación lateral derecha).
-- **Funcionalidad:**
-  - Muestra la metadata completa del prospecto.
-  - **Edición en caliente:** Campo de texto enriquecido para modificar `interaction_log`.
-  - Botón de guardado con estado de carga (`Loader2`) y confirmación toast en verde.
-  - Sincronización instantánea con el estado del tablero padre.
-
-### 5. Formulario de Ingreso de Leads (`/nuevo-lead`)
-- **Acceso:** Protegido por Middleware.
-- **Validación con Zod:**
-  - `company_name`: Mínimo 2 caracteres.
-  - `contact_name`: Mínimo 2 caracteres.
-  - `software_type`: Validación contra los 6 tipos del ENUM.
-  - `assigned_to`: Nombre obligatorio del asesor.
-  - `interaction_log`: Mínimo 10 caracteres obligatorios.
-  - `appointment_scheduled`: Booleano (checkbox reactivo).
-  - `appointment_date`: Validación condicional cruzada (`.refine()`). Si `appointment_scheduled` es `true`, el campo de fecha y hora es estrictamente obligatorio.
-- **Flujo:** Al guardar exitosamente, muestra alerta de confirmación y redirige automáticamente al tablero en 1.2 segundos.
-
-### 6. Capa de Protección y Sesiones (`middleware.ts`)
-- Intercepta todas las rutas excepto archivos estáticos (`_next`, favicons, imágenes).
-- Refresca automáticamente las cookies de sesión en cada navegación.
-- Redirección segura:
-  - Sin sesión activa intentando ver `/` o `/nuevo-lead` -> Redirige a `/login`.
-  - Con sesión activa intentando ver `/login` -> Redirige a `/`.
+### 4. Módulo de Proyectos (Operativa)
+- Gestión de los proyectos firmados.
+- Control de estados: Desde `Planificación` y `Desarrollo` hasta `Entregado` y `Mantenimiento`.
+- Rastreo de URLs de producción y repositorios.
 
 ---
 
-## 6. Usuarios y Credenciales de Acceso Activas
+## 6. Historial de Versiones y Modificaciones
 
-Las siguientes cuentas han sido creadas en Supabase Auth y validadas con confirmación inmediata de correo electrónico:
+### Versión 1.2.0 (21/09/2026) - Evolución Estructural
+- Implementación de RBAC (Role-Based Access Control) para separar perfiles Admin y Comercial.
+- Tablas `clients` y `client_contacts` añadidas. Conversión manual y automática de leads a clientes.
+- Sistema transversal de Auditoría (`audit_logs`) con triggers automáticos en PostgreSQL.
+- Ampliación del pipeline comercial en `lead_status_enum`.
+- Nuevas entidades comerciales: `demos`, `demo_feedback`, `proposals`, `projects`.
+- Automatización del flujo comercial: Demo -> Propuesta -> Aceptación -> Auto-creación de Proyecto y Cliente.
+- Nuevas vistas UI funcionales y modulares para todas las entidades implementadas, sin perder el minimalismo del MVP original.
 
-| Usuario | Rol en Sistema | Correo de Acceso |
-| :--- | :--- | :--- |
-| **Administrador Principal** | Auditor / Supervisor de Pipeline | `robinisonsolorzano99@gmail.com` |
-| **Administrador (Reserva)** | Auditor / Supervisor de Pipeline | `robinsonsolorzano99@gmail.com` |
-| **Asesor Comercial** | Captura y Gestión de Prospectos | `asesor@rsdsolutions.lat` |
-
----
-
-## 7. Variables de Entorno
-
-| Variable | Visibilidad | Obligatoria en Vercel | Descripción |
-| :--- | :--- | :--- | :--- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Cliente / Servidor | **Sí** | Endpoint del proyecto Supabase (`https://gzgdilrlzqitsprhqcld.supabase.co`) |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Cliente / Servidor | **Sí** | Clave anónima pública para autenticación e interacción con RLS |
-
----
-
-## 8. Historial de Versiones y Modificaciones
-
-### Versión 1.0.0 (21/09/2026)
-- Creación inicial del proyecto con Next.js 14 App Router, Tailwind y TypeScript.
-- Creación de esquema relacional `leads` con enums, RLS y triggers en Supabase.
-- Implementación de Kanban multi-columna con `@dnd-kit` y actualización optimista.
-- Formulario de captura con validación Zod y DatePicker condicional.
-- Panel Sheet para edición directa de bitácoras de interacción.
-- Configuración de Middleware de protección de sesión con `@supabase/ssr`.
-- Despliegue y repositorio enlazado a GitHub (`main`) con verificación de build en verde.
+### Versión 1.0.0 (21/09/2026) - MVP Inicial
+- Creación del proyecto con Next.js 14, Tailwind y Supabase.
+- Implementación de Kanban con `@dnd-kit` y actualización optimista.
+- Formulario de leads y protección con Middleware de sesión.

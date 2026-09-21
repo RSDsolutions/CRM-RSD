@@ -21,14 +21,18 @@ import { createClient } from '@/utils/supabase/client';
 import { PlusCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 
+// Columnas del Kanban — refleja el pipeline comercial real de RSD Solutions
 const COLUMNS: { id: LeadStatus; label: string; dotColor: string }[] = [
-  { id: 'Nuevo', label: 'Nuevo', dotColor: 'bg-blue-500' },
-  { id: 'Contactado', label: 'Contactado', dotColor: 'bg-yellow-500' },
-  { id: 'Cita Agendada', label: 'Cita Agendada', dotColor: 'bg-purple-500' },
-  { id: 'Propuesta', label: 'Propuesta', dotColor: 'bg-cyan-500' },
-  { id: 'Negociación', label: 'Negociación', dotColor: 'bg-amber-500' },
-  { id: 'Cerrado-Ganado', label: 'Ganado', dotColor: 'bg-emerald-500' },
-  { id: 'Cerrado-Perdido', label: 'Perdido', dotColor: 'bg-rose-500' },
+  { id: 'Nuevo',           label: 'Nuevo',          dotColor: 'bg-blue-500' },
+  { id: 'Contactado',      label: 'Contactado',      dotColor: 'bg-yellow-500' },
+  { id: 'Diagn\u00f3stico',      label: 'Diagn\u00f3stico',      dotColor: 'bg-sky-500' },
+  { id: 'Demo',            label: 'Demo',            dotColor: 'bg-purple-500' },
+  { id: 'Feedback Demo',   label: 'Feedback Demo',   dotColor: 'bg-violet-500' },
+  { id: 'Propuesta',       label: 'Propuesta',       dotColor: 'bg-cyan-500' },
+  { id: 'Negociaci\u00f3n',     label: 'Negociaci\u00f3n',     dotColor: 'bg-amber-500' },
+  { id: 'Aprobado',        label: 'Aprobado',        dotColor: 'bg-teal-500' },
+  { id: 'Convertido',      label: 'Convertido',      dotColor: 'bg-emerald-500' },
+  { id: 'Cerrado-Perdido', label: 'Perdido',         dotColor: 'bg-rose-500' },
 ];
 
 interface KanbanBoardProps {
