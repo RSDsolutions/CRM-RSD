@@ -2,7 +2,7 @@
 
 **Documento de Estado Técnico, Arquitectura y Registro Funcional**  
 **Fecha de Auditoría:** 21 de Septiembre de 2026  
-**Versión del Sistema:** 1.3.0 (Fase 3 - Ciclo Post-Proyecto y Facturación Operativa)  
+**Versión del Sistema:** 1.4.0 (Fase 4 - Dashboard Operativo e Indicadores)  
 **Organización:** RSD Solutions  
 **Repositorio GitHub:** [https://github.com/RSDsolutions/CRM-RSD](https://github.com/RSDsolutions/CRM-RSD)  
 **ID del Proyecto Supabase:** `gzgdilrlzqitsprhqcld`
@@ -43,24 +43,18 @@ CRM-RSD/
 │   │   ├── clientes/             # Módulo de Directorio de Clientes
 │   │   ├── comercial/            # Módulo Comercial (Demos y Propuestas)
 │   │   ├── proyectos/            # Módulo Operativo de Proyectos
+│   │   ├── dashboard/            # [FASE 4] Dashboard de métricas globales
 │   │   └── page.tsx              # Vista Kanban principal de Leads
 │   ├── actions/                  # Server Actions (Mutaciones)
 │   │   ├── clients.ts, demos.ts, proposals.ts, projects.ts
-│   │   ├── deliveries.ts         # [FASE 3]
-│   │   ├── acceptances.ts        # [FASE 3]
-│   │   ├── payments.ts           # [FASE 3]
-│   │   ├── maintenance.ts        # [FASE 3]
-│   │   └── renewals.ts           # [FASE 3]
+│   │   ├── deliveries.ts, acceptances.ts, payments.ts, maintenance.ts, renewals.ts
+│   │   └── dashboard.ts          # [FASE 4] Server action para extracción de métricas
 │   ├── layout.tsx                # Layout principal con Navbar dinámico (Roles)
 │   ├── login/                    # Autenticación
 │   └── nuevo-lead/               # Ingreso de prospectos
 ├── components/
-│   ├── clients/, demos/, kanban/, proposals/
-│   ├── projects/                 # Componentes UI de Proyectos
-│   │   ├── project-detail-view.tsx  # Vista unificada en Tabs
-│   │   ├── deliveries-section.tsx   # [FASE 3]
-│   │   ├── payments-section.tsx     # [FASE 3]
-│   │   └── maintenance-section.tsx  # [FASE 3]
+│   ├── dashboard/                # [FASE 4] Componentes UI del Dashboard (metric-card.tsx)
+│   ├── clients/, demos/, kanban/, proposals/, projects/
 │   └── navbar.tsx                # Barra superior con navegación por módulos y RBAC
 ├── types/
 │   └── database.types.ts         # Definiciones TypeScript de entidades actualizadas
@@ -77,29 +71,22 @@ CRM-RSD/
 
 El sistema ha evolucionado hacia un ERP desacoplando el ciclo de vida del proyecto en entidades atómicas que garantizan trazabilidad y reglas de negocio.
 
-### A. Tipos Enumerados (`ENUM`) Actualizados
-1. **`lead_status_enum`:**
-   - Flujo comercial: `Nuevo`, `Contactado`, `Diagnóstico`, `Demo`, `Feedback Demo`, `Propuesta`, `Negociación`, `Aprobado`, `Convertido`, `Cerrado-Perdido`, `Perdido`
-2. **`project_status_enum`:** (Lógica en UI/Types)
-   - Estados de ejecución puros: `Pendiente de inicio`, `Planificación`, `Diseño`, `Desarrollo`, `Pruebas internas`, `Completado`, `Cancelado`.
-   - *Nota: Los estados históricos (Mantenimiento, Pagado, Entregado) ya no se gestionan en este select, sino en sus respectivas entidades.*
-
-### B. Entidades Principales
+### A. Entidades Principales
 1. **`leads`**: Prospectos ingresados. Mantiene el pipeline inicial.
 2. **`profiles`**: Extensión de `auth.users` para manejar metadatos, nombres y Roles (`admin` | `comercial`).
 3. **`clients` & `client_contacts`**: Directorio formal de empresas o personas que ya son clientes activos.
 4. **`demos` & `demo_feedback`**: Registro de presentaciones de software a prospectos o clientes.
 5. **`proposals`**: Cotizaciones formales. Autogeneran su correlativo (`RSD-PROP-2026-001`).
 6. **`projects`**: Trabajos de desarrollo en ejecución. Desacoplado en la Fase 3, centrado solo en el estado de desarrollo.
-7. **[FASE 3] `project_deliveries`**: Historial de entregas (iteraciones, Betas, versiones finales). Relación 1:N con proyectos.
-8. **[FASE 3] `project_acceptances`**: Validaciones del cliente sobre una entrega. Relación 1:1 con entregas. Si se aprueba, auto-cierra el proyecto (`projects.status = Completado`).
-9. **[FASE 3] `payments`**: Pagos del cliente (Anticipo, Hito, Saldo Final). Un pago puede ser 'Registrado' y un `admin` debe pasarlo a 'Confirmado'.
-10. **[FASE 3] `maintenance_contracts`**: Contratos de soporte post-lanzamiento. Se autogenera transaccionalmente (3 meses incluidos) si se confirma un pago y el proyecto ya estaba completado.
-11. **[FASE 3] `maintenance_events`**: Bitácora de incidencias o requerimientos del cliente durante un contrato de soporte.
-12. **[FASE 3] `renewals`**: Entidad prospectiva para realizar seguimiento cuando el mantenimiento está por vencer.
+7. **`project_deliveries`**: Historial de entregas (iteraciones, Betas, versiones finales). Relación 1:N con proyectos.
+8. **`project_acceptances`**: Validaciones del cliente sobre una entrega. Relación 1:1 con entregas. Si se aprueba, auto-cierra el proyecto (`projects.status = Completado`).
+9. **`payments`**: Pagos del cliente (Anticipo, Hito, Saldo Final). Un pago puede ser 'Registrado' y un `admin` debe pasarlo a 'Confirmado'.
+10. **`maintenance_contracts`**: Contratos de soporte post-lanzamiento. Se autogenera transaccionalmente (3 meses incluidos) si se confirma un pago y el proyecto ya estaba completado.
+11. **`maintenance_events`**: Bitácora de incidencias o requerimientos del cliente durante un contrato de soporte.
+12. **`renewals`**: Entidad prospectiva para realizar seguimiento cuando el mantenimiento está por vencer.
 13. **`audit_logs`**: Tabla de trazabilidad que registra automáticamente todos los eventos de DB con Triggers.
 
-### C. Políticas de Seguridad (RBAC y RLS)
+### B. Políticas de Seguridad (RBAC y RLS)
 - **RLS (Row Level Security):** Activo en todas las tablas.
 - Todo acceso anónimo está bloqueado.
 - **`DELETE`**: Eliminaciones físicas están estrictamente restringidas solo a usuarios con rol `admin`.
@@ -109,16 +96,25 @@ El sistema ha evolucionado hacia un ERP desacoplando el ciclo de vida del proyec
 
 ## 5. Vistas y Módulos del Sistema
 
-### 1. Tablero Comercial Kanban (Leads)
+### 1. Dashboard Operativo (Fase 4)
+- **Acceso:** Restringido a Administradores (vía RPC).
+- **Métricas Consolidadas:**
+  - *Proyectos*: Activos, Completados, Entregas pendientes de revisión.
+  - *Finanzas*: Pagos por confirmar vs Facturado (confirmado).
+  - *Soporte*: Contratos activos y aquellos por vencer (alerta a menos de 15 días).
+  - *Comercial*: Renovaciones pendientes.
+- **Enfoque Action-Driven**: Interfaz en base a `metric-cards` orientada no solo a ver datos, sino a identificar cuellos de botella (ej. Entregas en revisión).
+
+### 2. Tablero Comercial Kanban (Leads)
 - Mantiene toda la robustez del Drag&Drop optimista original.
 
-### 2. Módulo Comercial (Demos y Propuestas)
+### 3. Módulo Comercial (Demos y Propuestas)
 - Demos con bitácora de feedback y paso fluido a Propuestas (Cotizaciones automatizadas).
 
-### 3. Módulo de Directorio de Clientes
+### 4. Módulo de Directorio de Clientes
 - Manejo de información fiscal y notas.
 
-### 4. Módulo de Proyectos (Rediseñado Fase 3)
+### 5. Módulo de Proyectos (Rediseñado Fase 3)
 La Vista de Detalle de Proyecto fue reconstruida utilizando componentes tipo *Tabs* (Resumen, Entregas, Pagos, Mantenimiento):
 - **Resumen:** Presupuesto, Enlaces a código/producción, Fechas y selector limitado a progreso del software.
 - **Entregas & Aceptación:** Historial visual de entregas y registro in situ de la Aceptación/Rechazo del cliente.
@@ -128,6 +124,11 @@ La Vista de Detalle de Proyecto fue reconstruida utilizando componentes tipo *Ta
 ---
 
 ## 6. Historial de Versiones y Modificaciones
+
+### Versión 1.4.0 (21/09/2026) - Fase 4 (Dashboard Operativo)
+- Implementación de la vista `/dashboard` para Administradores.
+- Creación de un Action optimizado (`getDashboardMetricsAction`) para agrupar las métricas de negocio desde las entidades de la Fase 3.
+- Actualización de barra de navegación (`Navbar`) basada en roles.
 
 ### Versión 1.3.0 (21/09/2026) - Fase 3 (Post-Proyecto)
 - Desacople de estados en `projects`. Migración de dependencias hacia nuevas entidades.

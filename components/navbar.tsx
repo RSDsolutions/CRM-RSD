@@ -15,7 +15,8 @@ import {
   Monitor,
   FileText,
   FolderKanban,
-  ChevronDown
+  ChevronDown,
+  Activity
 } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import { User } from '@supabase/supabase-js';
@@ -94,6 +95,11 @@ export function Navbar() {
       label: 'Proyectos',
       icon: <FolderKanban className="w-4 h-4" />,
       href: '/proyectos',
+    },
+    {
+      label: 'Operaciones',
+      icon: <Activity className="w-4 h-4" />,
+      href: '/dashboard',
     },
   ];
 
