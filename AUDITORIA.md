@@ -2,7 +2,7 @@
 
 **Documento de Estado Técnico, Arquitectura y Registro Funcional**  
 **Fecha de Auditoría:** 21 de Septiembre de 2026  
-**Versión del Sistema:** 1.2.0 (Fase 1 y 2 - Evolución a Plataforma Comercial)  
+**Versión del Sistema:** 1.3.0 (Fase 3 - Ciclo Post-Proyecto y Facturación Operativa)  
 **Organización:** RSD Solutions  
 **Repositorio GitHub:** [https://github.com/RSDsolutions/CRM-RSD](https://github.com/RSDsolutions/CRM-RSD)  
 **ID del Proyecto Supabase:** `gzgdilrlzqitsprhqcld`
@@ -10,7 +10,7 @@
 ---
 
 ## 1. Resumen Ejecutivo
-El **CRM de RSD Solutions** es una plataforma web interna diseñada para la gestión integral del ciclo de vida del cliente. Comenzó como un MVP para captura de prospectos y ha evolucionado hacia un ERP comercial completo que cubre: Prospección (Leads), Demostraciones de Producto, Cotizaciones y Propuestas Comerciales, Conversión a Clientes y Gestión de Proyectos en ejecución. 
+El **CRM de RSD Solutions** es una plataforma web interna diseñada para la gestión integral del ciclo de vida del cliente. Comenzó como un MVP para captura de prospectos y ha evolucionado hacia un ERP comercial completo que cubre: Prospección (Leads), Demostraciones de Producto, Cotizaciones y Propuestas Comerciales, Conversión a Clientes, Gestión de Proyectos en ejecución, y ahora también el **Ciclo Post-Proyecto (Entregas, Aceptaciones, Pagos, Mantenimiento y Renovaciones)**.
 
 Todo el sistema está soportado por un robusto modelo relacional en PostgreSQL, RBAC (Role-Based Access Control) y trazabilidad completa de auditoría, manteniendo una interfaz minimalista, veloz e intuitiva para los asesores comerciales.
 
@@ -45,25 +45,27 @@ CRM-RSD/
 │   │   ├── proyectos/            # Módulo Operativo de Proyectos
 │   │   └── page.tsx              # Vista Kanban principal de Leads
 │   ├── actions/                  # Server Actions (Mutaciones)
-│   │   ├── clients.ts
-│   │   ├── demos.ts
-│   │   ├── proposals.ts
-│   │   └── projects.ts
+│   │   ├── clients.ts, demos.ts, proposals.ts, projects.ts
+│   │   ├── deliveries.ts         # [FASE 3]
+│   │   ├── acceptances.ts        # [FASE 3]
+│   │   ├── payments.ts           # [FASE 3]
+│   │   ├── maintenance.ts        # [FASE 3]
+│   │   └── renewals.ts           # [FASE 3]
 │   ├── layout.tsx                # Layout principal con Navbar dinámico (Roles)
 │   ├── login/                    # Autenticación
 │   └── nuevo-lead/               # Ingreso de prospectos
 ├── components/
-│   ├── clients/                  # Componentes UI de Clientes
-│   ├── demos/                    # Componentes UI de Demos
-│   ├── kanban/                   # Tablero Kanban Drag&Drop
-│   ├── proposals/                # Componentes UI de Propuestas
+│   ├── clients/, demos/, kanban/, proposals/
 │   ├── projects/                 # Componentes UI de Proyectos
+│   │   ├── project-detail-view.tsx  # Vista unificada en Tabs
+│   │   ├── deliveries-section.tsx   # [FASE 3]
+│   │   ├── payments-section.tsx     # [FASE 3]
+│   │   └── maintenance-section.tsx  # [FASE 3]
 │   └── navbar.tsx                # Barra superior con navegación por módulos y RBAC
 ├── types/
 │   └── database.types.ts         # Definiciones TypeScript de entidades actualizadas
 ├── utils/
-│   ├── auth/
-│   │   └── roles.ts              # Utilidades para roles y RBAC
+│   ├── auth/roles.ts             # Utilidades para roles y RBAC
 │   └── supabase/                 # Clientes Supabase SSR
 ├── middleware.ts                 # Interceptor de sesión y redirecciones
 └── supabase/migrations/          # Archivos SQL de evolución de Base de Datos
@@ -73,27 +75,35 @@ CRM-RSD/
 
 ## 4. Modelo de Base de Datos y Seguridad (PostgreSQL)
 
-El sistema ha evolucionado de una única tabla `leads` a un esquema normalizado completo para gestión comercial.
+El sistema ha evolucionado hacia un ERP desacoplando el ciclo de vida del proyecto en entidades atómicas que garantizan trazabilidad y reglas de negocio.
 
 ### A. Tipos Enumerados (`ENUM`) Actualizados
 1. **`lead_status_enum`:**
    - Flujo comercial: `Nuevo`, `Contactado`, `Diagnóstico`, `Demo`, `Feedback Demo`, `Propuesta`, `Negociación`, `Aprobado`, `Convertido`, `Cerrado-Perdido`, `Perdido`
-   - *Legado (por compatibilidad)*: `Cita Agendada`, `Cerrado-Ganado`.
+2. **`project_status_enum`:** (Lógica en UI/Types)
+   - Estados de ejecución puros: `Pendiente de inicio`, `Planificación`, `Diseño`, `Desarrollo`, `Pruebas internas`, `Completado`, `Cancelado`.
+   - *Nota: Los estados históricos (Mantenimiento, Pagado, Entregado) ya no se gestionan en este select, sino en sus respectivas entidades.*
 
 ### B. Entidades Principales
-1. **`leads`**: Prospectos ingresados. Mantiene el pipeline inicial. Al llegar a "Aprobado" y firmar propuesta, se convierten a `clients`.
+1. **`leads`**: Prospectos ingresados. Mantiene el pipeline inicial.
 2. **`profiles`**: Extensión de `auth.users` para manejar metadatos, nombres y Roles (`admin` | `comercial`).
 3. **`clients` & `client_contacts`**: Directorio formal de empresas o personas que ya son clientes activos.
-4. **`demos` & `demo_feedback`**: Registro de presentaciones de software a prospectos o clientes. Historial inmutable de feedback por demo.
-5. **`proposals`**: Cotizaciones formales. Autogeneran su correlativo (`RSD-PROP-2026-001`). Al aceptarse, disparan la creación automática de un Proyecto y un Cliente (si el origen era un lead).
-6. **`projects`**: Trabajos de desarrollo en ejecución, con control de estados, fechas de inicio/entrega y enlaces a repositorios y producción.
-7. **`audit_logs`**: Tabla de trazabilidad. Un trigger de BD registra automáticamente todos los eventos de `INSERT`, `UPDATE` o `DELETE` de casi todas las entidades, guardando el autor, tabla y el diff de datos modificado.
+4. **`demos` & `demo_feedback`**: Registro de presentaciones de software a prospectos o clientes.
+5. **`proposals`**: Cotizaciones formales. Autogeneran su correlativo (`RSD-PROP-2026-001`).
+6. **`projects`**: Trabajos de desarrollo en ejecución. Desacoplado en la Fase 3, centrado solo en el estado de desarrollo.
+7. **[FASE 3] `project_deliveries`**: Historial de entregas (iteraciones, Betas, versiones finales). Relación 1:N con proyectos.
+8. **[FASE 3] `project_acceptances`**: Validaciones del cliente sobre una entrega. Relación 1:1 con entregas. Si se aprueba, auto-cierra el proyecto (`projects.status = Completado`).
+9. **[FASE 3] `payments`**: Pagos del cliente (Anticipo, Hito, Saldo Final). Un pago puede ser 'Registrado' y un `admin` debe pasarlo a 'Confirmado'.
+10. **[FASE 3] `maintenance_contracts`**: Contratos de soporte post-lanzamiento. Se autogenera transaccionalmente (3 meses incluidos) si se confirma un pago y el proyecto ya estaba completado.
+11. **[FASE 3] `maintenance_events`**: Bitácora de incidencias o requerimientos del cliente durante un contrato de soporte.
+12. **[FASE 3] `renewals`**: Entidad prospectiva para realizar seguimiento cuando el mantenimiento está por vencer.
+13. **`audit_logs`**: Tabla de trazabilidad que registra automáticamente todos los eventos de DB con Triggers.
 
 ### C. Políticas de Seguridad (RBAC y RLS)
 - **RLS (Row Level Security):** Activo en todas las tablas.
 - Todo acceso anónimo está bloqueado.
-- Las lecturas, inserciones y actualizaciones están permitidas a usuarios autenticados, pero la lógica de la UI y los Server Actions controlan los flujos.
-- **`DELETE`**: Eliminaciones físicas en tablas como `clients`, `proposals` o `projects` están estrictamente restringidas solo a usuarios con rol `admin` (`public.get_user_role() = 'admin'`).
+- **`DELETE`**: Eliminaciones físicas están estrictamente restringidas solo a usuarios con rol `admin`.
+- **Server Actions**: La lógica transaccional de pagos, mantenimientos y finalización de proyectos reside en el servidor. No confiamos en el cliente para esto.
 
 ---
 
@@ -101,37 +111,36 @@ El sistema ha evolucionado de una única tabla `leads` a un esquema normalizado 
 
 ### 1. Tablero Comercial Kanban (Leads)
 - Mantiene toda la robustez del Drag&Drop optimista original.
-- Adaptado para mostrar las nuevas columnas de pipeline (`Diagnóstico`, `Demo`, `Propuesta`, etc.).
-- Permite la visualización rápida de leads y su gestión hasta la conversión.
 
 ### 2. Módulo Comercial (Demos y Propuestas)
-- **Demos:** Permite registrar demostraciones asociadas a Leads o Clientes. Cada demo tiene una bitácora de feedback asociada para rastrear objeciones o comentarios del prospecto post-presentación.
-- **Propuestas:** Cotizaciones con precio base y descuento.
-  - Flujo automatizado: Al cambiar una propuesta al estado **"Aceptada"**, el sistema automáticamente (mediante Server Actions):
-    1. Convierte el Lead a un Cliente en el directorio.
-    2. Crea un Proyecto asignado a ese cliente, migrando el presupuesto y el alcance.
+- Demos con bitácora de feedback y paso fluido a Propuestas (Cotizaciones automatizadas).
 
 ### 3. Módulo de Directorio de Clientes
-- Vista en tabla y vista de perfil (Profile) para cada cliente.
-- Manejo de información fiscal, múltiples contactos (`client_contacts`) y notas.
+- Manejo de información fiscal y notas.
 
-### 4. Módulo de Proyectos (Operativa)
-- Gestión de los proyectos firmados.
-- Control de estados: Desde `Planificación` y `Desarrollo` hasta `Entregado` y `Mantenimiento`.
-- Rastreo de URLs de producción y repositorios.
+### 4. Módulo de Proyectos (Rediseñado Fase 3)
+La Vista de Detalle de Proyecto fue reconstruida utilizando componentes tipo *Tabs* (Resumen, Entregas, Pagos, Mantenimiento):
+- **Resumen:** Presupuesto, Enlaces a código/producción, Fechas y selector limitado a progreso del software.
+- **Entregas & Aceptación:** Historial visual de entregas y registro in situ de la Aceptación/Rechazo del cliente.
+- **Pagos:** Sistema para agregar pagos con monto, tipo (Anticipo, Final) y estado (Registrado/Confirmado). Calculo en vivo de total confirmado.
+- **Mantenimiento & Soporte:** Visor de días restantes de soporte, barra indicadora de vigencia y registro completo de *Tickets* o actividades vinculadas a ese periodo.
 
 ---
 
 ## 6. Historial de Versiones y Modificaciones
 
+### Versión 1.3.0 (21/09/2026) - Fase 3 (Post-Proyecto)
+- Desacople de estados en `projects`. Migración de dependencias hacia nuevas entidades.
+- Creación de esquema `project_deliveries`, `project_acceptances`, `payments`, `maintenance_contracts`, `maintenance_events`, `renewals`.
+- Lógica transaccional cruzada (Pagos + Proyecto Completo = Activación de Mantenimiento Automático).
+- Refactorización de UI del Detalle del Proyecto en un diseño modular en pestañas (Tabs).
+- Todo el módulo integrado a `audit_logs` para estricta trazabilidad operativa.
+
 ### Versión 1.2.0 (21/09/2026) - Evolución Estructural
 - Implementación de RBAC (Role-Based Access Control) para separar perfiles Admin y Comercial.
 - Tablas `clients` y `client_contacts` añadidas. Conversión manual y automática de leads a clientes.
 - Sistema transversal de Auditoría (`audit_logs`) con triggers automáticos en PostgreSQL.
-- Ampliación del pipeline comercial en `lead_status_enum`.
-- Nuevas entidades comerciales: `demos`, `demo_feedback`, `proposals`, `projects`.
 - Automatización del flujo comercial: Demo -> Propuesta -> Aceptación -> Auto-creación de Proyecto y Cliente.
-- Nuevas vistas UI funcionales y modulares para todas las entidades implementadas, sin perder el minimalismo del MVP original.
 
 ### Versión 1.0.0 (21/09/2026) - MVP Inicial
 - Creación del proyecto con Next.js 14, Tailwind y Supabase.

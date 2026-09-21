@@ -217,20 +217,12 @@ export interface Proposal {
 // ─── Project ──────────────────────────────────────────────────
 export type ProjectStatus =
   | 'Pendiente de inicio'
-  | 'Planificación'
-  | 'Diseño'
+  | 'Planificaci\u00f3n'
+  | 'Dise\u00f1o'
   | 'Desarrollo'
   | 'Pruebas internas'
-  | 'Revisión del cliente'
-  | 'Correcciones'
-  | 'Listo para entrega'
-  | 'Entregado'
-  | 'Aceptado'
-  | 'Pendiente de pago'
-  | 'Pagado'
-  | 'Mantenimiento'
-  | 'Finalizado'
-  | 'Cancelado';
+  | 'Cancelado'
+  | 'Completado';
 
 export interface Project {
   id: string;
@@ -268,4 +260,125 @@ export interface AuditLog {
   user_id: string | null;
   user_email: string | null;
   created_at: string;
+}
+
+// \u2500\u2500\u2500 ProjectDelivery \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+export type DeliveryStatus =
+  | 'Pendiente revisi\u00f3n'
+  | 'En revisi\u00f3n'
+  | 'Aceptada'
+  | 'Rechazada'
+  | 'Aceptada con observaciones';
+
+export interface ProjectDelivery {
+  id: string;
+  project_id: string;
+  delivery_number: number;
+  title: string;
+  description: string | null;
+  version: string | null;
+  status: DeliveryStatus;
+  delivery_url: string | null;
+  repository_url: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// \u2500\u2500\u2500 ProjectAcceptance \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+export type AcceptanceStatus =
+  | 'Aceptada'
+  | 'Aceptada con observaciones'
+  | 'Rechazada';
+
+export interface ProjectAcceptance {
+  id: string;
+  project_id: string;
+  delivery_id: string | null;
+  status: AcceptanceStatus;
+  accepted_by_client_name: string | null;
+  observations: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// \u2500\u2500\u2500 Payment \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+export type PaymentType = 'Anticipo' | 'Hito' | 'Saldo final' | '\u00danico';
+export type PaymentStatus = 'Pendiente' | 'Registrado' | 'Confirmado' | 'Rechazado' | 'Anulado';
+
+export interface Payment {
+  id: string;
+  project_id: string;
+  proposal_id: string | null;
+  client_id: string;
+  amount: number;
+  currency: string;
+  payment_type: PaymentType;
+  status: PaymentStatus;
+  payment_date: string | null;
+  payment_method: string | null;
+  reference: string | null;
+  receipt_url: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// \u2500\u2500\u2500 MaintenanceContract \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+export type MaintenanceType = 'Incluido' | 'Renovaci\u00f3n';
+export type MaintenanceStatus = 'Pendiente' | 'Activo' | 'Por vencer' | 'Vencido' | 'Renovado' | 'Cancelado';
+
+export interface MaintenanceContract {
+  id: string;
+  project_id: string;
+  client_id: string;
+  payment_id: string | null;
+  type: MaintenanceType;
+  status: MaintenanceStatus;
+  start_date: string | null;
+  end_date: string | null;
+  duration_months: number;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// \u2500\u2500\u2500 MaintenanceEvent \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+export type MaintenanceEventType = 'Soporte' | 'Correcci\u00f3n' | 'Preventivo' | 'Incidencia' | 'Otro';
+export type MaintenanceEventStatus = 'Abierto' | 'En progreso' | 'Resuelto' | 'Cerrado';
+export type PriorityLevel = 'Alta' | 'Media' | 'Baja';
+
+export interface MaintenanceEvent {
+  id: string;
+  maintenance_contract_id: string;
+  type: MaintenanceEventType;
+  title: string;
+  description: string | null;
+  status: MaintenanceEventStatus;
+  priority: PriorityLevel;
+  resolved_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// \u2500\u2500\u2500 Renewal \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+export type RenewalStatus = 'Contactar' | 'Propuesta enviada' | 'En negociaci\u00f3n' | 'Renovado' | 'No renovado';
+
+export interface Renewal {
+  id: string;
+  client_id: string;
+  project_id: string | null;
+  maintenance_contract_id: string | null;
+  status: RenewalStatus;
+  renewal_date_target: string | null;
+  amount: number | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
