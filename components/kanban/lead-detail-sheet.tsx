@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Lead } from '@/types/database.types';
 import { createClient } from '@/utils/supabase/client';
+import { convertLeadToClientAction } from '@/app/actions/clients';
 import { 
   X, 
   User, 
@@ -12,10 +13,13 @@ import {
   Save, 
   Loader2, 
   CheckCircle2, 
-  AlertCircle 
+  AlertCircle,
+  UserPlus,
+  ArrowRight
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useRouter } from 'next/navigation';
 
 interface LeadDetailSheetProps {
   lead: Lead | null;
@@ -25,8 +29,10 @@ interface LeadDetailSheetProps {
 
 export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailSheetProps) {
   const supabase = createClient();
+  const router = useRouter();
   const [logText, setLogText] = useState(lead?.interaction_log || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -37,6 +43,14 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
   }, [lead]);
 
   if (!lead) return null;
+
+  // Ya fue convertido si tiene client_id
+  const alreadyConverted = !!lead.client_id;
+  // Elegible para conversión si está en estados avanzados
+  const eligibleForConversion = 
+    lead.status === 'Cerrado-Ganado' ||
+    lead.status === 'Propuesta' ||
+    lead.status === 'Negociación';
 
   const handleSaveLog = async () => {
     setIsSaving(true);
@@ -60,6 +74,35 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
       setStatusMessage({ type: 'error', text: err.message || 'Error al guardar la bitácora' });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleConvertToClient = async () => {
+    if (!confirm(`¿Confirmas convertir a "${lead.company_name}" en cliente de RSD Solutions?`)) return;
+
+    setIsConverting(true);
+    setStatusMessage(null);
+
+    try {
+      const clientId = await convertLeadToClientAction(lead.id);
+      setStatusMessage({ type: 'success', text: '✅ Lead convertido a cliente correctamente. Redirigiendo...' });
+      
+      const updatedLead: Lead = { 
+        ...lead, 
+        status: 'Cerrado-Ganado',
+        client_id: clientId,
+        converted_at: new Date().toISOString(),
+      };
+      onLeadUpdated(updatedLead);
+
+      setTimeout(() => {
+        onClose();
+        router.push(`/clientes/${clientId}`);
+      }, 1500);
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: err.message || 'Error al convertir el lead' });
+    } finally {
+      setIsConverting(false);
     }
   };
 
@@ -168,6 +211,38 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
                 </button>
               </div>
             </div>
+
+            {/* Convertir a Cliente */}
+            {!alreadyConverted && eligibleForConversion && (
+              <div className="pt-4 border-t border-slate-800">
+                <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">
+                  Conversión
+                </p>
+                <button
+                  onClick={handleConvertToClient}
+                  disabled={isConverting}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                >
+                  {isConverting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" />Convirtiendo...</>
+                  ) : (
+                    <><UserPlus className="w-4 h-4" />Convertir a Cliente<ArrowRight className="w-3.5 h-3.5" /></>
+                  )}
+                </button>
+                <p className="text-[10px] text-slate-500 text-center mt-2">
+                  Se creará un perfil de cliente con los datos de este lead.
+                </p>
+              </div>
+            )}
+
+            {alreadyConverted && (
+              <div className="pt-4 border-t border-slate-800">
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  <span>Este lead ya fue convertido a cliente.</span>
+                </div>
+              </div>
+            )}
 
           </div>
         </div>

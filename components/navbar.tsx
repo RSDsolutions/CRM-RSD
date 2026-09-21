@@ -3,29 +3,37 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
+import { getUserRole, getRoleLabel } from '@/utils/auth/roles';
 import { 
   KanbanSquare, 
   PlusCircle, 
   LogOut, 
-  Layers
+  Layers,
+  Users,
+  ShieldCheck,
+  UserCircle2
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { User } from '@supabase/supabase-js';
+import { UserRole } from '@/types/database.types';
 
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<UserRole>('comercial');
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data?.user?.email) {
-        setUserEmail(data.user.email);
+      if (data?.user) {
+        setUser(data.user);
+        setRole(getUserRole(data.user));
       }
     });
   }, [supabase]);
 
-  // Si estamos en la página de login, no mostrar la barra de navegación
+  // No mostrar navbar en la página de login
   if (pathname === '/login') return null;
 
   const handleLogout = async () => {
@@ -33,6 +41,15 @@ export function Navbar() {
     router.push('/login');
     router.refresh();
   };
+
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
+
+  const navLinkClass = (href: string) =>
+    `flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+      isActive(href)
+        ? 'bg-slate-800 text-white font-semibold'
+        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+    }`;
 
   return (
     <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
@@ -54,36 +71,29 @@ export function Navbar() {
             </div>
           </Link>
 
-          {/* Enlaces de Navegación */}
+          {/* Navegación principal */}
           <nav className="hidden md:flex items-center gap-1">
-            <Link
-              href="/"
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                pathname === '/'
-                  ? 'bg-slate-800 text-white font-semibold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-              }`}
-            >
+            <Link href="/" className={navLinkClass('/')}>
               <KanbanSquare className="w-4 h-4" />
-              Tablero Kanban
+              Kanban
             </Link>
 
-            <Link
-              href="/nuevo-lead"
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                pathname === '/nuevo-lead'
-                  ? 'bg-slate-800 text-white font-semibold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-              }`}
-            >
+            <Link href="/nuevo-lead" className={navLinkClass('/nuevo-lead')}>
               <PlusCircle className="w-4 h-4" />
               Nuevo Lead
+            </Link>
+
+            <Link href="/clientes" className={navLinkClass('/clientes')}>
+              <Users className="w-4 h-4" />
+              Clientes
             </Link>
           </nav>
         </div>
 
         {/* User Info & Actions */}
         <div className="flex items-center gap-3">
+
+          {/* Botón móvil: Nuevo Lead */}
           <Link
             href="/nuevo-lead"
             className="md:hidden p-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
@@ -92,13 +102,20 @@ export function Navbar() {
             <PlusCircle className="w-4 h-4" />
           </Link>
 
-          {userEmail && (
-            <div className="hidden sm:flex flex-col text-right">
+          {/* Badge de rol + email */}
+          {user && (
+            <div className="hidden sm:flex flex-col items-end text-right">
               <span className="text-xs text-slate-300 font-medium truncate max-w-[180px]">
-                {userEmail}
+                {user.email}
               </span>
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider">
-                Comercial / Admin
+              <span className={`text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1 ${
+                role === 'admin' ? 'text-violet-400' : 'text-indigo-400'
+              }`}>
+                {role === 'admin' 
+                  ? <ShieldCheck className="w-3 h-3" />
+                  : <UserCircle2 className="w-3 h-3" />
+                }
+                {getRoleLabel(role)}
               </span>
             </div>
           )}
