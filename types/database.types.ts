@@ -416,6 +416,17 @@ export interface Proposal {
   discount: number;
   total: number | null;
   currency: string;
+  base_amount?: number;
+  extras_amount?: number;
+  tax_rate?: number;
+  tax_amount?: number;
+  monthly_maintenance?: number;
+  estimated_delivery_weeks?: number;
+  commercial_terms?: string | null;
+  robinson_approval_status?: 'Borrador' | 'Pendiente aprobación' | 'Aprobada por Robinson' | 'Rechazada';
+  approved_by?: string | null;
+  approved_at?: string | null;
+  proposal_version?: number;
   valid_until: string | null;
   status: ProposalStatus;
   rejection_reason: string | null;
@@ -456,7 +467,50 @@ export interface Project {
   production_url: string | null;
   repository_url: string | null;
   assigned_to: string | null;
+  commercial_advisor_id?: string | null;
+  technical_director_id?: string | null;
+  has_blocker?: boolean;
+  active_blocker?: string | null;
+  scope_version?: number;
   notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  milestones?: ProjectMilestone[];
+  scope_changes?: ScopeChangeRequest[];
+}
+
+// ─── Hitos de Proyecto (Fase D) ───────────────────────────────
+export interface ProjectMilestone {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string | null;
+  target_date: string;
+  completed_date: string | null;
+  status: 'Pendiente' | 'En progreso' | 'Completado' | 'Atrasado';
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── Control de Cambios de Alcance (Fase D) ───────────────────
+export interface ScopeChangeRequest {
+  id: string;
+  project_id: string;
+  change_code: string;
+  requested_by: string | null;
+  description: string;
+  reason: string;
+  expected_benefit: string | null;
+  affected_modules: string | null;
+  technical_impact: string | null;
+  schedule_impact_days: number;
+  commercial_impact_amount: number;
+  status: 'Solicitado' | 'En evaluación' | 'Pendiente aprobación interna' | 'Aprobado por Robinson' | 'Aprobado por cliente' | 'Rechazado' | 'Implementado';
+  robinson_decision: string | null;
+  robinson_notes: string | null;
+  client_acceptance_date: string | null;
   created_at: string;
   updated_at: string;
 }

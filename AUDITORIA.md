@@ -194,6 +194,22 @@ A continuación se detalla el análisis comparativo entre los requerimientos del
 
 ## 8. Historial de Versiones y Modificaciones
 
+### Versión 2.3.0 (04/10/2026) - Fase D (Propuestas Comerciales, Proyectos y Control de Cambios de Alcance)
+- **Base de Datos & CLI:**
+  - Migración aplicada por Supabase CLI: `20261004000002_fase_d_propuestas_proyectos_alcance.sql`.
+  - Ampliación de tabla `proposals`: desglose financiero configurable (`base_amount`, `extras_amount`, `tax_rate`, `tax_amount`, `total`), cuota de mantenimiento mensual (`monthly_maintenance`), plazo de entrega estimado (`estimated_delivery_weeks`), términos comerciales y flujo de aprobación de Robinson (`robinson_approval_status`, `approved_by`, `approved_at`, `proposal_version`).
+  - Ampliación de tabla `projects`: distinción de responsabilidad dual (`commercial_advisor_id` para seguimiento comercial permanente del asesor vs `technical_director_id` para dirección técnica de Robinson), versión de alcance (`scope_version`), control de bloqueos críticos (`has_blocker`, `active_blocker`).
+  - Nueva tabla `project_milestones`: cronograma de hitos técnicos con fecha objetivo, fecha de completado y estados (`Pendiente`, `En progreso`, `Completado`, `Atrasado`).
+  - Nueva tabla `scope_change_requests`: control formal y trazable de cambios de alcance (Change Requests `CR-YYYY-NNN`, impacto técnico, días adicionales, costo adicional, revisión de Robinson y aceptación de cliente).
+- **Lógica de Servidor & Server Actions:**
+  - `app/actions/milestones.ts`: `createMilestoneAction`, `updateMilestoneStatusAction`, `getProjectMilestonesAction`.
+  - `app/actions/scope-changes.ts`: `createScopeChangeRequestAction`, `reviewScopeChangeAction`, `clientAcceptScopeChangeAction` (incrementa `scope_version` y ajusta presupuesto del proyecto automáticamente al ser aceptado por el cliente), `getProjectScopeChangesAction`.
+- **Experiencia de Usuario & Vistas:**
+  - `components/projects/milestones-section.tsx`: Tablero de hitos técnicos, porcentaje de avance, control de estados y creación de nuevos hitos de desarrollo.
+  - `components/projects/scope-changes-section.tsx`: Gestión integral de Change Requests, métricas de impacto comercial/plazo, panel de revisión ejecutiva para Robinson y registro de aceptación formal del cliente.
+  - `components/projects/project-detail-view.tsx`: Soporte ampliado a 6 pestañas (`Resumen`, `Hitos`, `Control de Cambios`, `Entregas`, `Pagos`, `Mantenimiento`), indicadores de Asesor Comercial vs Dirección Técnica, banner de alerta de proyectos bloqueados y versión de alcance visible.
+  - `app/(dashboard)/proyectos/[id]/page.tsx`: Consulta relacional unificada de hitos y cambios de alcance.
+
 ### Versión 2.2.0 (04/10/2026) - Fase C (Diagnóstico, ADN de Empresa, Demos, Archivos .md y Tokens IA)
 - **Base de Datos & CLI:**
   - Migración aplicada por Supabase CLI: `20261004000001_fase_c_diagnostico_dna_demos.sql`.
