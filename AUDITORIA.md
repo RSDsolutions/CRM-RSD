@@ -1,149 +1,219 @@
-# 📋 AUDITORÍA DEL SISTEMA: MINI-CRM RSD SOLUTIONS
+# 📋 AUDITORÍA INTEGRAL DEL SISTEMA: CRM INTERNO RSD SOLUTIONS
 
-**Documento de Estado Técnico, Arquitectura y Registro Funcional**  
-**Fecha de Auditoría:** 21 de Septiembre de 2026  
-**Versión del Sistema:** 1.4.0 (Fase 4 - Dashboard Operativo e Indicadores)  
+**Documento Maestro de Arquitectura, Estado Técnico, Matriz de Brechas y Hoja de Ruta**  
+**Fecha de Actualización:** 04 de Octubre de 2026  
+**Versión del Sistema:** 2.0.0 (Auditoría Integral y Adaptación Empresarial)  
 **Organización:** RSD Solutions  
 **Repositorio GitHub:** [https://github.com/RSDsolutions/CRM-RSD](https://github.com/RSDsolutions/CRM-RSD)  
-**ID del Proyecto Supabase:** `gzgdilrlzqitsprhqcld`
+**ID del Proyecto Supabase:** `gzgdilrlzqitsprhqcld` (Región: `us-east-1`, Estado: `ACTIVE_HEALTHY`)  
+**CLI Supabase:** v2.116.0 — Conexión y sincronización remota verificadas.
 
 ---
 
-## 1. Resumen Ejecutivo
-El **CRM de RSD Solutions** es una plataforma web interna diseñada para la gestión integral del ciclo de vida del cliente. Comenzó como un MVP para captura de prospectos y ha evolucionado hacia un ERP comercial completo que cubre: Prospección (Leads), Demostraciones de Producto, Cotizaciones y Propuestas Comerciales, Conversión a Clientes, Gestión de Proyectos en ejecución, y ahora también el **Ciclo Post-Proyecto (Entregas, Aceptaciones, Pagos, Mantenimiento y Renovaciones)**.
+## 1. Resumen Ejecutivo de la Auditoría
 
-Todo el sistema está soportado por un robusto modelo relacional en PostgreSQL, RBAC (Role-Based Access Control) y trazabilidad completa de auditoría, manteniendo una interfaz minimalista, veloz e intuitiva para los asesores comerciales.
+El **CRM interno de RSD Solutions** es la columna vertebral operativa, comercial y documental para la gestión integral de prospectos y proyectos de software a medida. El sistema existente cuenta con una base sólida construida sobre Next.js 14, Tailwind CSS, TypeScript y Supabase (PostgreSQL 17), cubriendo inicialmente la captación de leads en un tablero Kanban, conversión básica a clientes, registro de demos y cotizaciones, y un ciclo preliminar post-proyecto (entregas, pagos y mantenimientos).
+
+La presente auditoría evalúa la solución contra los **30 requerimientos no negociables de la operación de RSD Solutions**, identificando el mapa exacto de lo existente, las brechas funcionales y técnicas, los riesgos de compatibilidad y seguridad, y el plan de migración incremental por fases para adaptar el CRM sin alterar flujos estables ni reiniciar desde cero.
 
 ---
 
-## 2. Ficha Técnica y Stack Tecnológico
+## 2. Estado de Conectividad e Infraestructura Supabase CLI
 
-| Capa | Tecnología | Versión | Propósito |
+Se ha verificado la conectividad y capacidad de manipulación de la base de datos vía CLI y Management API:
+
+1. **Estado del Proyecto Remoto:** El proyecto remoto `gzgdilrlzqitsprhqcld` (`CRM-RSD`) fue reactivado exitosamente desde estado inactivo a `ACTIVE_HEALTHY`.
+2. **Sincronización de Migraciones:**
+   - `20260921000000_fase2_roles_clients.sql` (Local: Sincronizada | Remota: Aplicada)
+   - `20260921000001_lead_status_profiles.sql` (Local: Sincronizada | Remota: Aplicada)
+   - `20260921000002_demos_proposals_projects.sql` (Local: Sincronizada | Remota: Aplicada)
+   - `20260921000003_post_project_lifecycle.sql` (Local: Sincronizada | Remota: Aplicada)
+3. **Validación CLI:** `npx supabase db push --linked --dry-run` y `npx supabase migration list` completaron con código de salida `0`.
+4. **Verificación de DDL y Modificaciones:** El CLI tiene credenciales autenticadas en Windows Credential Manager (`Supabase CLI:supabase`), permitiendo crear tablas, funciones, disparadores y políticas de seguridad RLS mediante nuevas migraciones en `supabase/migrations/` e impulsarlas directamente con el CLI.
+
+---
+
+## 3. Ficha Técnica y Stack Tecnológico
+
+| Capa | Tecnología | Versión | Rol en la Arquitectura |
 | :--- | :--- | :--- | :--- |
-| **Framework Web** | Next.js (App Router) | `14.2.35` | Renderizado híbrido (SSR/CSR), Server Actions y Middleware |
-| **Librería UI** | React / React DOM | `18.3.1` | Motor de interfaz de usuario reactiva |
-| **Lenguaje** | TypeScript | `^5.7.3` | Tipado estricto en cliente, servidor y esquemas |
-| **Estilos CSS** | Tailwind CSS + Autoprefixer | `3.4.17` | Sistema de diseño responsivo y tema oscuro (Dark Slate) |
-| **Base de Datos** | Supabase (PostgreSQL 17) | `17.x` | Base de datos relacional con RLS, triggers y extensiones |
+| **Framework Web** | Next.js (App Router) | `14.2.35` | SSR/CSR híbrido, Server Actions tipadas y Middleware de sesión |
+| **Librería UI** | React / React DOM | `18.3.1` | Componentes declarativos e interactivos |
+| **Lenguaje** | TypeScript | `^5.7.3` | Tipado estricto extremo (`types/database.types.ts`) sin `any` |
+| **Estilos CSS** | Tailwind CSS + Autoprefixer | `3.4.17` | Sistema visual consistente en tema oscuro moderno (*Dark Slate*) |
+| **Base de Datos** | Supabase (PostgreSQL 17) | `17.6.1` | Relacional con RLS, triggers de auditoría, funciones PL/pgSQL y constraints atómicas |
 | **Autenticación** | Supabase Auth (`@supabase/ssr`) | `0.5.2` | Manejo de sesiones seguras mediante Cookies HTTP-only |
-| **Gestión Drag & Drop**| `@dnd-kit/core` + `@dnd-kit/sortable` | `6.3.1` / `10.0.0` | Motor de arrastre accesible con soporte táctil y puntero |
-| **Formularios** | React Hook Form | `7.54.2` | Manejo de formularios sin re-renderizados innecesarios |
-| **Validación** | Zod + `@hookform/resolvers` | `3.24.2` | Validación estricta de esquemas y tipos inferidos |
-| **Iconografía** | Lucide React | `0.475.0` | Iconos vectoriales ligeros |
-| **Manejo de Fechas** | Date-fns (con locale `es`) | `4.1.0` | Formateo, parsing y cálculo de alertas de vencimiento |
+| **Drag & Drop** | `@dnd-kit/core` + `@dnd-kit/sortable` | `6.3.1` / `10.0.0` | Tablero Kanban con actualización optimista y rollback automático |
+| **Formularios** | React Hook Form | `7.54.2` | Formularios modularizados por secciones con validación fluida |
+| **Validación de Esquemas** | Zod + `@hookform/resolvers` | `3.24.2` | Validación estricta en cliente y servidor |
+| **Iconografía** | Lucide React | `0.475.0` | Iconos vectoriales consistentes |
+| **Manejo de Fechas** | Date-fns (locale `es`) | `4.1.0` | Formateo, parsing y alertas de fechas de seguimiento |
 
 ---
 
-## 3. Arquitectura del Código Fuente (Evolucionada)
+## 4. Mapa de Arquitectura y Módulos Existentes
 
 ```text
 CRM-RSD/
 ├── app/
-│   ├── (dashboard)/              # Rutas protegidas (Agrupación lógica)
-│   │   ├── clientes/             # Módulo de Directorio de Clientes
-│   │   ├── comercial/            # Módulo Comercial (Demos y Propuestas)
-│   │   ├── proyectos/            # Módulo Operativo de Proyectos
-│   │   ├── dashboard/            # [FASE 4] Dashboard de métricas globales
-│   │   └── page.tsx              # Vista Kanban principal de Leads
-│   ├── actions/                  # Server Actions (Mutaciones)
+│   ├── (dashboard)/                     # Rutas protegidas por middleware
+│   │   ├── layout.tsx                   # Layout global con Navbar dinámico y RBAC
+│   │   ├── page.tsx                     # Vista principal: Tablero Kanban de Leads
+│   │   ├── clientes/                    # Módulo de Directorio de Clientes
+│   │   │   ├── page.tsx                 # Listado y filtros de clientes
+│   │   │   ├── nuevo/page.tsx           # Creación manual de clientes
+│   │   │   └── [id]/page.tsx            # Perfil y contactos del cliente
+│   │   ├── comercial/                   # Módulo Comercial (Demos y Propuestas)
+│   │   │   ├── demos/                   # Submódulo de Demostraciones
+│   │   │   │   ├── page.tsx             # Listado de demos
+│   │   │   │   ├── nuevo/page.tsx       # Creación de demo
+│   │   │   │   └── [id]/page.tsx        # Ficha de demo con feedback
+│   │   │   └── propuestas/              # Submódulo de Cotizaciones
+│   │   │       ├── page.tsx             # Listado de propuestas
+│   │   │       ├── nueva/page.tsx       # Generación de propuesta
+│   │   │       └── [id]/page.tsx        # Ficha de propuesta
+│   │   ├── proyectos/                   # Módulo Operativo de Proyectos
+│   │   │   ├── page.tsx                 # Listado de proyectos
+│   │   │   ├── nuevo/page.tsx           # Nuevo proyecto
+│   │   │   └── [id]/page.tsx            # Detalle con pestañas: Resumen, Entregas, Pagos, Mantenimiento
+│   │   └── dashboard/                   # Dashboard administrativo preliminar
+│   │       └── page.tsx                 # Métricas de proyectos, pagos y soporte
+│   ├── actions/                         # Server Actions (Lógica transaccional de servidor)
 │   │   ├── clients.ts, demos.ts, proposals.ts, projects.ts
 │   │   ├── deliveries.ts, acceptances.ts, payments.ts, maintenance.ts, renewals.ts
-│   │   └── dashboard.ts          # [FASE 4] Server action para extracción de métricas
-│   ├── layout.tsx                # Layout principal con Navbar dinámico (Roles)
-│   ├── login/                    # Autenticación
-│   └── nuevo-lead/               # Ingreso de prospectos
-├── components/
-│   ├── dashboard/                # [FASE 4] Componentes UI del Dashboard (metric-card.tsx)
-│   ├── clients/, demos/, kanban/, proposals/, projects/
-│   └── navbar.tsx                # Barra superior con navegación por módulos y RBAC
+│   │   └── dashboard.ts
+│   ├── login/page.tsx                   # Autenticación con Supabase Auth
+│   └── nuevo-lead/page.tsx              # Formulario de registro de prospectos
+├── components/                          # Componentes reutilizables de UI
+│   ├── navbar.tsx                       # Barra de navegación superior con RBAC
+│   ├── kanban/                          # Tablero Kanban (kanban-board, lead-card, lead-detail-sheet)
+│   ├── clients/                         # Tablas y tarjetas de clientes
+│   ├── demos/                           # Formularios y listas de demos
+│   ├── proposals/                       # Formularios y fichas de propuestas
+│   ├── projects/                        # Vistas por pestañas de proyectos (Tabs)
+│   └── dashboard/                       # Tarjetas métricas (metric-card.tsx)
 ├── types/
-│   └── database.types.ts         # Definiciones TypeScript de entidades actualizadas
+│   └── database.types.ts                # Contratos TypeScript de entidades
 ├── utils/
-│   ├── auth/roles.ts             # Utilidades para roles y RBAC
-│   └── supabase/                 # Clientes Supabase SSR
-├── middleware.ts                 # Interceptor de sesión y redirecciones
-└── supabase/migrations/          # Archivos SQL de evolución de Base de Datos
+│   ├── auth/roles.ts                    # Helpers de RBAC (getUserRole, isAdmin)
+│   └── supabase/                        # Clientes SSR/Browser de Supabase
+├── middleware.ts                        # Protección de rutas y renovación de tokens
+└── supabase/
+    ├── config.toml                      # Configuración de CLI y servicios locales
+    ├── schema.sql                       # Esquema base unificado
+    └── migrations/                      # 4 migraciones históricas versionadas
 ```
 
 ---
 
-## 4. Modelo de Base de Datos y Seguridad (PostgreSQL)
+## 5. Matriz de Brechas Funcionales (Gap Matrix)
 
-El sistema ha evolucionado hacia un ERP desacoplando el ciclo de vida del proyecto en entidades atómicas que garantizan trazabilidad y reglas de negocio.
+A continuación se detalla el análisis comparativo entre los requerimientos del proceso de RSD Solutions y el código actual:
 
-### A. Entidades Principales
-1. **`leads`**: Prospectos ingresados. Mantiene el pipeline inicial.
-2. **`profiles`**: Extensión de `auth.users` para manejar metadatos, nombres y Roles (`admin` | `comercial`).
-3. **`clients` & `client_contacts`**: Directorio formal de empresas o personas que ya son clientes activos.
-4. **`demos` & `demo_feedback`**: Registro de presentaciones de software a prospectos o clientes.
-5. **`proposals`**: Cotizaciones formales. Autogeneran su correlativo (`RSD-PROP-2026-001`).
-6. **`projects`**: Trabajos de desarrollo en ejecución. Desacoplado en la Fase 3, centrado solo en el estado de desarrollo.
-7. **`project_deliveries`**: Historial de entregas (iteraciones, Betas, versiones finales). Relación 1:N con proyectos.
-8. **`project_acceptances`**: Validaciones del cliente sobre una entrega. Relación 1:1 con entregas. Si se aprueba, auto-cierra el proyecto (`projects.status = Completado`).
-9. **`payments`**: Pagos del cliente (Anticipo, Hito, Saldo Final). Un pago puede ser 'Registrado' y un `admin` debe pasarlo a 'Confirmado'.
-10. **`maintenance_contracts`**: Contratos de soporte post-lanzamiento. Se autogenera transaccionalmente (3 meses incluidos) si se confirma un pago y el proyecto ya estaba completado.
-11. **`maintenance_events`**: Bitácora de incidencias o requerimientos del cliente durante un contrato de soporte.
-12. **`renewals`**: Entidad prospectiva para realizar seguimiento cuando el mantenimiento está por vencer.
-13. **`audit_logs`**: Tabla de trazabilidad que registra automáticamente todos los eventos de DB con Triggers.
-
-### B. Políticas de Seguridad (RBAC y RLS)
-- **RLS (Row Level Security):** Activo en todas las tablas.
-- Todo acceso anónimo está bloqueado.
-- **`DELETE`**: Eliminaciones físicas están estrictamente restringidas solo a usuarios con rol `admin`.
-- **Server Actions**: La lógica transaccional de pagos, mantenimientos y finalización de proyectos reside en el servidor. No confiamos en el cliente para esto.
-
----
-
-## 5. Vistas y Módulos del Sistema
-
-### 1. Dashboard Operativo (Fase 4)
-- **Acceso:** Restringido a Administradores (vía RPC).
-- **Métricas Consolidadas:**
-  - *Proyectos*: Activos, Completados, Entregas pendientes de revisión.
-  - *Finanzas*: Pagos por confirmar vs Facturado (confirmado).
-  - *Soporte*: Contratos activos y aquellos por vencer (alerta a menos de 15 días).
-  - *Comercial*: Renovaciones pendientes.
-- **Enfoque Action-Driven**: Interfaz en base a `metric-cards` orientada no solo a ver datos, sino a identificar cuellos de botella (ej. Entregas en revisión).
-
-### 2. Tablero Comercial Kanban (Leads)
-- Mantiene toda la robustez del Drag&Drop optimista original.
-
-### 3. Módulo Comercial (Demos y Propuestas)
-- Demos con bitácora de feedback y paso fluido a Propuestas (Cotizaciones automatizadas).
-
-### 4. Módulo de Directorio de Clientes
-- Manejo de información fiscal y notas.
-
-### 5. Módulo de Proyectos (Rediseñado Fase 3)
-La Vista de Detalle de Proyecto fue reconstruida utilizando componentes tipo *Tabs* (Resumen, Entregas, Pagos, Mantenimiento):
-- **Resumen:** Presupuesto, Enlaces a código/producción, Fechas y selector limitado a progreso del software.
-- **Entregas & Aceptación:** Historial visual de entregas y registro in situ de la Aceptación/Rechazo del cliente.
-- **Pagos:** Sistema para agregar pagos con monto, tipo (Anticipo, Final) y estado (Registrado/Confirmado). Calculo en vivo de total confirmado.
-- **Mantenimiento & Soporte:** Visor de días restantes de soporte, barra indicadora de vigencia y registro completo de *Tickets* o actividades vinculadas a ese periodo.
+| # | Módulo / Requerimiento | Estado Actual | Estado Requerido | Brecha / Plan de Acción |
+| :-: | :--- | :--- | :--- | :--- |
+| **1** | **Roles y Permisos (RBAC)** | Parcial (`admin`, `comercial`) | 4 roles formales (`admin`, `comercial`, `tecnico`, `soporte`) con permisos por módulo/acción. | Ampliar `UserRole`, configurar matriz de permisos y políticas RLS granulares con aislamiento por asignación. |
+| **2** | **Prospectos, Empresas y Contactos** | Parcial (`leads` + `clients`) | Ficha de prospecto con nichos empresariales (8+ nichos), canal de origen (Meta, etc.), método actual, RUC, ciudad/provincia, detección de duplicados y contactos múltiples. | Enriquecer `leads` con campos de prospección detallada y validación preventiva de duplicados. |
+| **3** | **Embudo Comercial** | Parcial (10 etapas visibles) | 28 etapas configurables o estructuradas con reglas estrictas de transición y notas de cambio obligatorias (ej. motivo de pérdida). | Implementar tabla `pipeline_stages`, historial de transiciones y validación en Server Actions de transiciones no permitidas. |
+| **4** | **Actividades y Seguimiento** | Inexistente (solo texto `interaction_log`) | Bitácora cronológica estructurada (`activities`) con tipo (llamada, WhatsApp, reunión, etc.), resultado, próximo paso y alertas de inactividad. | Crear entidad `activities`, componentes de timeline y alertas de seguimiento vencido. |
+| **5** | **Tareas Globales y Vinculadas** | Inexistente (solo tickets de soporte) | Módulo de tareas vinculadas a lead, cliente o proyecto con prioridades, fechas límite, estados y visualización en lista/tablero. | Crear tabla `tasks`, Server Actions asociadas y vista de tareas. |
+| **6** | **Agenda y Disponibilidad de Robinson** | Inexistente (solo campo booleano en lead) | Bloques de disponibilidad administrados por Robinson, reserva por asesores y **prevención atómica de doble reserva** en servidor/DB. | Crear `availability_blocks` y `meetings` con constraint de exclusión PostgreSQL (`EXCLUDE WITH &&`) y RPC transaccional. |
+| **7** | **Formulario de Diagnóstico** | Inexistente | Formulario estructurado para Robinson (negocio, problemas, procesos, solución preliminar, viabilidad) y guardado de borradores. | Crear entidad `diagnostics` vinculada al lead/reunión y generador de reporte. |
+| **8** | **ADN de la Empresa / Cliente** | Inexistente (solo `notes` en cliente) | Ficha central versionada con requerimientos, identidad visual y **Contexto consolidado del negocio** en Markdown (NO generador automático de prompts). | Crear `company_dna` y `dna_versions`, garantizando que el asesor redacte el prompt manualmente. |
+| **9** | **Viabilidad de Proyectos** | Inexistente | Ficha técnica de evaluación de complejidad, módulos, dependencias, riesgos y decisión formal de Robinson. | Crear tabla `feasibility_reviews` y flujo de aprobación técnica. |
+| **10** | **Demos, Archivos .md y Tokens IA** | Parcial (tabla `demos` básica) | Solicitud detallada, repositorio de archivos `.md` con versionado, registro manual de ventanas de uso de IA de 5h (0-100%) y aprobación estricta de Robinson. | Crear `demo_files` (markdown), `ai_usage_windows` (declaración manual 0-100% por ventana) y máquina de estados de aprobación. |
+| **11** | **Presentación de Demo y Resultados** | Parcial (solo feedback genérico) | Registro formal de presentación, funcionalidades mostradas vs aceptadas, objeciones y decisión del cliente. | Ampliar `demos` con campos estructurados de presentación y acta de feedback. |
+| **12** | **Propuestas Comerciales y Tarifas** | Parcial (cotización simple) | Tarifas configurables, desglose de precio base, extras, IVA configurable, mantenimiento y aprobación de Robinson. | Actualizar `proposals` con desglose impositivo y soporte de plantillas de impresión/PDF. |
+| **13** | **Gestión de Proyectos** | Implementado básico | Conversión desde oportunidad, retención del asesor como responsable comercial, hitos y tareas de proyecto. | Conectar `projects` con ADN, demo y propuesta, y añadir `project_milestones` y `project_tasks`. |
+| **14** | **Control de Cambios de Alcance** | Inexistente | Solicitud formal de cambio de alcance con impacto en plazo/costo, aprobación de Robinson y versión de alcance resultante. | Crear entidad `scope_change_requests` con trazabilidad completa. |
+| **15** | **Pruebas (QA) y Capacitación** | Inexistente | Casos de prueba (`qa_test_cases`, `qa_test_results`) y actas de capacitación (`training_sessions`) con confirmación del cliente. | Crear modelos y vistas para control de calidad y sesiones formativas. |
+| **16** | **Clientes, Soporte e Incidencias** | Parcial (mantenimiento y eventos) | Mesa de ayuda con tickets clasificados por impacto y severidad, confirmación de solución y SLA. | Renombrar o extender `maintenance_events` a `support_tickets` con categorización completa. |
+| **17** | **Retención, Renovación y Referidos** | Parcial (renovaciones básicas) | Alertas de vencimiento de soporte gratuito (3 meses), gestión de planes, referidos (`referrals`) y recuperación de oportunidades perdidas. | Crear entidades `referrals` y `lost_opportunities` con motivos y fechas de reactivación. |
+| **18** | **Dashboard Administrativo Real** | Parcial (4 métricas fijas) | Panel ejecutivo con datos 100% reales (leads, embudo, conversión, desempeño de asesores, agenda, demos, proyectos, soporte). Cero datos ficticios. | Rediseñar `/dashboard` consumiendo consultas agregadas reales sobre todas las entidades. |
+| **19** | **Centro de Notificaciones Internas** | Inexistente | Notificaciones dentro del CRM (asignaciones, tareas por vencer, reuniones, demos observadas/aprobadas, bloqueos). | Crear tabla `notifications` con lectura y filtrado. |
+| **20** | **Búsqueda Global y Ficha 360°** | Inexistente | Buscador omnibox y vista integral del cliente que consolida historial, ADN, proyectos, demos y finanzas en un solo lugar. | Implementar barra de búsqueda y vista agregada 360°. |
 
 ---
 
-## 6. Historial de Versiones y Modificaciones
+## 6. Análisis de Riesgos de Compatibilidad y Seguridad
 
-### Versión 1.4.0 (21/09/2026) - Fase 4 (Dashboard Operativo)
+1. **Riesgo de Regresión en Leads Existentes:**
+   - *Riesgo:* Modificar el tipo `lead_status_enum` o columnas de `leads` podría romper el tablero Kanban o invalidar datos históricos en producción.
+   - *Mitigación:* Se mantendrán intactos los valores históricos del enum y los estados legacy (`Cerrado-Ganado`, `Cerrado-Perdido`, `Cita Agendada`). Las nuevas columnas se añadirán con `ADD COLUMN IF NOT EXISTS` y valores por defecto seguros.
+2. **Riesgo de Concurrencia en la Agenda (Doble Reserva):**
+   - *Riesgo:* Dos asesores comerciales intentando reservar el mismo bloque de Robinson simultáneamente.
+   - *Mitigación:* Validación no solo en la interfaz, sino mediante una función transaccional `reserve_meeting_slot` en PostgreSQL con bloqueo de fila (`SELECT ... FOR UPDATE`) o constraint de exclusión temporal, garantizando atomicidad (ACID).
+3. **Riesgo de Fuga de Información y Elevación de Privilegios:**
+   - *Riesgo:* Asesores comerciales aprobando sus propias cotizaciones o accediendo a información privada de Robinson.
+   - *Mitigación:* Reglas RLS en PostgreSQL donde `aprobar` requiere `get_user_role() = 'admin'`, y las reservas de agenda ocultan detalles privados exponiendo únicamente la etiqueta "No disponible".
+4. **Riesgo de Fallo en Modo Offline / Docker:**
+   - *Riesgo:* Al no estar Docker Desktop activo en la estación de trabajo local, comandos como `supabase db diff` intentan levantar contenedores locales y fallan.
+   - *Mitigación:* Las migraciones se gestionan de forma declarativa con `npx supabase db push --linked` y scripts de verificación directa contra el endpoint SQL de Supabase Management API.
+
+---
+
+## 7. Plan de Implementación Incremental por Fases
+
+- **FASE A — Auditoría y Matriz de Brechas (Completada):**
+  - Inspección integral del código y base de datos.
+  - Verificación de CLI y conectividad Supabase.
+  - Documento de auditoría y matriz de brechas detallada.
+  - Commit: `docs(fase-a): auditoria exhaustiva, conectividad cli y matriz de brechas`.
+
+- **FASE B — Base Comercial y Agenda Compartida:**
+  - Enriquecimiento de `leads` (nichos, canales, detección de duplicados).
+  - Embudo comercial con etapas extendidas y registro de transiciones.
+  - Módulo de `activities` (seguimiento continuo) y `tasks` (tareas vinculadas).
+  - Módulo de agenda: Disponibilidad de Robinson, reserva atómica de asesores y prevención de solapamientos.
+
+- **FASE C — Diagnóstico, ADN de Empresa y Módulo de Demos:**
+  - Formulario estructurado de Diagnóstico para Robinson.
+  - ADN de la empresa / cliente versionado con contexto consolidado no-AI.
+  - Ficha de viabilidad técnica y comercial.
+  - Solicitud de demo, repositorio de archivos `.md` y registro manual de ventanas de tokens de IA de 5h (0-100%).
+  - Flujo de revisión y aprobación de Robinson.
+
+- **FASE D — Propuestas Comerciales, Alcance y Proyectos:**
+  - Generador de propuestas con tarifas dinámicas, desglose de IVA y aprobación.
+  - Conversión a proyecto manteniendo al asesor como responsable comercial.
+  - Hitos, tareas operativas y control de cambios de alcance trazable.
+
+- **FASE E — Calidad, Entrega, Soporte y Fidelización:**
+  - Pruebas QA (`qa_test_cases`, `qa_test_results`).
+  - Actas de entrega y capacitación.
+  - Mesa de ayuda, tickets de soporte y contratos de mantenimiento.
+  - Oportunidades perdidas (recuperación) y módulo de referidos.
+
+- **FASE F — Dirección Ejecutiva, Notificaciones y Auditoría:**
+  - Dashboard directivo con analítica 100% real (cero mocks).
+  - Centro de notificaciones internas del sistema.
+  - Repositorio documental y búsqueda global 360°.
+  - Verificación de compilación, permisos y entrega final.
+
+---
+
+## 8. Historial de Versiones y Modificaciones
+
+### Versión 2.0.0 (04/10/2026) - Fase A (Auditoría Integral y Matriz de Brechas)
+- Reactivación y verificación de salud de la base de datos Supabase remota (`ACTIVE_HEALTHY`).
+- Verificación exitosa de conectividad Supabase CLI (`db push --linked --dry-run`, `migration list`).
+- Auditoría exhaustiva de arquitectura, dependencias y rutas existentes.
+- Elaboración de la Matriz de Brechas funcional contra los 30 puntos de la especificación empresarial.
+- Formulación del plan de trabajo por fases y mitigación de riesgos de concurrencia y seguridad.
+
+### Versión 1.4.0 (21/09/2026) - Fase 4 (Dashboard Operativo Preliminar)
 - Implementación de la vista `/dashboard` para Administradores.
-- Creación de un Action optimizado (`getDashboardMetricsAction`) para agrupar las métricas de negocio desde las entidades de la Fase 3.
-- Actualización de barra de navegación (`Navbar`) basada en roles.
+- Creación del Server Action `getDashboardMetricsAction`.
+- Actualización de `Navbar` con soporte RBAC.
 
-### Versión 1.3.0 (21/09/2026) - Fase 3 (Post-Proyecto)
-- Desacople de estados en `projects`. Migración de dependencias hacia nuevas entidades.
-- Creación de esquema `project_deliveries`, `project_acceptances`, `payments`, `maintenance_contracts`, `maintenance_events`, `renewals`.
-- Lógica transaccional cruzada (Pagos + Proyecto Completo = Activación de Mantenimiento Automático).
-- Refactorización de UI del Detalle del Proyecto en un diseño modular en pestañas (Tabs).
-- Todo el módulo integrado a `audit_logs` para estricta trazabilidad operativa.
+### Versión 1.3.0 (21/09/2026) - Fase 3 (Ciclo Post-Proyecto Inicial)
+- Tablas `project_deliveries`, `project_acceptances`, `payments`, `maintenance_contracts`, `renewals`.
+- UI de detalle de proyecto modular en pestañas (Tabs).
 
-### Versión 1.2.0 (21/09/2026) - Evolución Estructural
-- Implementación de RBAC (Role-Based Access Control) para separar perfiles Admin y Comercial.
-- Tablas `clients` y `client_contacts` añadidas. Conversión manual y automática de leads a clientes.
-- Sistema transversal de Auditoría (`audit_logs`) con triggers automáticos en PostgreSQL.
-- Automatización del flujo comercial: Demo -> Propuesta -> Aceptación -> Auto-creación de Proyecto y Cliente.
+### Versión 1.2.0 (21/09/2026) - Fase 2 (Evolución Estructural)
+- Implementación de RBAC (`admin`, `comercial`) y tabla `clients`.
+- Sistema transversal de auditoría (`audit_logs`) con triggers automáticos.
 
 ### Versión 1.0.0 (21/09/2026) - MVP Inicial
 - Creación del proyecto con Next.js 14, Tailwind y Supabase.
-- Implementación de Kanban con `@dnd-kit` y actualización optimista.
-- Formulario de leads y protección con Middleware de sesión.
+- Tablero Kanban con `@dnd-kit` y formulario básico de leads.
