@@ -194,6 +194,23 @@ A continuación se detalla el análisis comparativo entre los requerimientos del
 
 ## 8. Historial de Versiones y Modificaciones
 
+### Versión 2.1.0 (04/10/2026) - Fase B (Base Comercial, Seguimiento y Agenda Compartida)
+- **Base de Datos & CLI:**
+  - Migración aplicada por Supabase CLI: `20261004000000_fase_b_base_comercial.sql`.
+  - Columnas añadidas a `leads`: `niche`, `legal_name`, `tax_id`, `city`, `province`, `website`, `social_media`, `contact_role`, `campaign`, `main_need`, `problem_description`, `current_management_method`, `team_size`, `reference_budget`, `next_action`, `next_followup_date`, `contact_preference`, `is_archived`.
+  - Nuevas tablas relacionales: `activities`, `tasks`, `availability_blocks`, `meetings`.
+  - Función transaccional atómica PostgreSQL `book_meeting_slot` con bloqueo `FOR UPDATE` para impedir dobles reservas concurrentes entre asesores comerciales.
+- **Rutas y Vistas Nuevas:**
+  - `/agenda`: Calendario semanal interactivo de Robinson Solórzano, bloques de disponibilidad, modal de reserva atómica y actualización de resultados de citas.
+  - `/tareas`: Tablero visual de tareas operativas y comerciales clasificadas por estado (`Pendiente`, `En progreso`, `Bloqueada`, `Completada`), prioridad y alertas de vencimiento.
+- **Formularios y Experiencia de Usuario:**
+  - `/nuevo-lead`: Formulario enriquecido modularizado en 4 pestañas (Datos de Empresa, Contacto Principal, Situación y Necesidad, Gestión Comercial) con detector preventivo de duplicados en tiempo real.
+  - `components/kanban/lead-detail-sheet.tsx`: Ficha expandida del prospecto con pestañas de Info General, Timeline de Actividades, Tareas asociadas y Bitácora histórica.
+  - `components/navbar.tsx`: Enlaces directos a `/agenda` y `/tareas` con navegación responsive.
+- **Roles & Tipado:**
+  - `types/database.types.ts` actualizado con 4 roles (`admin`, `comercial`, `tecnico`, `soporte`), interfaces `Activity`, `Task`, `AvailabilityBlock`, `Meeting`, `BusinessNiche`.
+  - `utils/auth/roles.ts`: Soporte ampliado para validación de roles en servidor y cliente.
+
 ### Versión 2.0.0 (04/10/2026) - Fase A (Auditoría Integral y Matriz de Brechas)
 - Reactivación y verificación de salud de la base de datos Supabase remota (`ACTIVE_HEALTHY`).
 - Verificación exitosa de conectividad Supabase CLI (`db push --linked --dry-run`, `migration list`).

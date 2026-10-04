@@ -16,7 +16,9 @@ import {
   FileText,
   FolderKanban,
   ChevronDown,
-  Activity
+  Activity,
+  Calendar,
+  CheckSquare
 } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import { User } from '@supabase/supabase-js';
@@ -87,6 +89,16 @@ export function Navbar() {
       ],
     },
     {
+      label: 'Agenda',
+      icon: <Calendar className="w-4 h-4" />,
+      href: '/agenda',
+    },
+    {
+      label: 'Tareas',
+      icon: <CheckSquare className="w-4 h-4" />,
+      href: '/tareas',
+    },
+    {
       label: 'Clientes',
       icon: <Users className="w-4 h-4" />,
       href: '/clientes',
@@ -97,7 +109,7 @@ export function Navbar() {
       href: '/proyectos',
     },
     {
-      label: 'Operaciones',
+      label: 'Dirección',
       icon: <Activity className="w-4 h-4" />,
       href: '/dashboard',
     },

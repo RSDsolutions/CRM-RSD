@@ -4,7 +4,31 @@
 // =============================================================
 
 // ─── Roles del sistema ────────────────────────────────────────
-export type UserRole = 'admin' | 'comercial';
+export type UserRole = 'admin' | 'comercial' | 'tecnico' | 'soporte';
+
+// ─── Nichos Empresariales ─────────────────────────────────────
+export type BusinessNiche =
+  | 'Clínica / consultorio'
+  | 'Distribuidora / mayorista'
+  | 'Servicios técnicos en campo'
+  | 'Educación / academia'
+  | 'Retail multisede'
+  | 'Legal / consultoría'
+  | 'Automotriz / taller'
+  | 'Inmobiliario / construcción'
+  | 'Otro';
+
+export const BUSINESS_NICHES: BusinessNiche[] = [
+  'Clínica / consultorio',
+  'Distribuidora / mayorista',
+  'Servicios técnicos en campo',
+  'Educación / academia',
+  'Retail multisede',
+  'Legal / consultoría',
+  'Automotriz / taller',
+  'Inmobiliario / construcción',
+  'Otro',
+];
 
 // ─── ENUMs de Leads ───────────────────────────────────────────
 export type SoftwareType =
@@ -75,6 +99,25 @@ export interface Lead {
   converted_at?: string | null;
   client_id?: string | null;
   assigned_to_user_id?: string | null;
+  // Fase B
+  legal_name?: string | null;
+  tax_id?: string | null;
+  city?: string | null;
+  province?: string | null;
+  website?: string | null;
+  social_media?: string | null;
+  contact_role?: string | null;
+  niche?: BusinessNiche | string | null;
+  campaign?: string | null;
+  main_need?: string | null;
+  problem_description?: string | null;
+  current_management_method?: string | null;
+  team_size?: string | null;
+  reference_budget?: string | null;
+  next_action?: string | null;
+  next_followup_date?: string | null;
+  contact_preference?: string | null;
+  is_archived?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -382,3 +425,155 @@ export interface Renewal {
   created_at: string;
   updated_at: string;
 }
+
+// ─── Actividades y Seguimiento (Fase B) ────────────────────────
+export type ActivityType =
+  | 'Llamada'
+  | 'WhatsApp'
+  | 'Correo'
+  | 'Reunión'
+  | 'Diagnóstico'
+  | 'Presentación demo'
+  | 'Seguimiento propuesta'
+  | 'Seguimiento proyecto'
+  | 'Seguimiento satisfacción'
+  | 'Renovación'
+  | 'Referido'
+  | 'Nota interna'
+  | 'Otro';
+
+export type ActivityStatus = 'Planificada' | 'Realizada' | 'Cancelada' | 'Reprogramada';
+export type ActivityVisibility = 'Interno' | 'Compartible';
+
+export interface Activity {
+  id: string;
+  lead_id: string | null;
+  client_id: string | null;
+  project_id: string | null;
+  activity_type: ActivityType;
+  activity_date: string;
+  user_id: string | null;
+  summary: string;
+  result: string | null;
+  next_step: string | null;
+  next_followup_date: string | null;
+  visibility: ActivityVisibility;
+  status: ActivityStatus;
+  created_at: string;
+  updated_at: string;
+  // Joined relation
+  profiles?: {
+    full_name: string | null;
+    email: string | null;
+  } | null;
+}
+
+// ─── Tareas Globales y Vinculadas (Fase B) ─────────────────────
+export type TaskPriority = 'Baja' | 'Media' | 'Alta' | 'Crítica';
+export type TaskStatus = 'Pendiente' | 'En progreso' | 'Bloqueada' | 'Completada' | 'Cancelada';
+export type TaskCategory = 'Comercial' | 'Técnica' | 'Administrativa' | 'Soporte';
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string | null;
+  category: TaskCategory;
+  priority: TaskPriority;
+  status: TaskStatus;
+  assigned_to: string | null;
+  created_by: string | null;
+  due_date: string | null;
+  lead_id: string | null;
+  client_id: string | null;
+  project_id: string | null;
+  completed_at: string | null;
+  cancel_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined relations
+  assigned_profile?: {
+    full_name: string | null;
+    email: string | null;
+  } | null;
+  leads?: {
+    company_name: string;
+    contact_name: string;
+  } | null;
+}
+
+// ─── Agenda y Disponibilidad (Fase B) ─────────────────────────
+export type SlotType =
+  | 'Diagnóstico'
+  | 'Presentación Demo'
+  | 'General'
+  | 'Bloqueo Personal'
+  | 'Reunión Interna';
+
+export interface AvailabilityBlock {
+  id: string;
+  user_id: string;
+  title: string;
+  slot_type: SlotType;
+  start_time: string;
+  end_time: string;
+  is_available: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MeetingType =
+  | 'Diagnóstico'
+  | 'Presentación de Demo'
+  | 'Revisión de Propuesta'
+  | 'Seguimiento'
+  | 'Reunión de Proyecto'
+  | 'Soporte'
+  | 'Otro';
+
+export type MeetingModality = 'Virtual' | 'Presencial';
+export type MeetingStatus =
+  | 'Solicitada'
+  | 'Confirmada'
+  | 'Realizada'
+  | 'No asistió'
+  | 'Cancelada'
+  | 'Reprogramada';
+
+export interface Meeting {
+  id: string;
+  title: string;
+  meeting_type: MeetingType;
+  host_id: string;
+  advisor_id: string;
+  lead_id: string | null;
+  client_id: string | null;
+  project_id: string | null;
+  start_time: string;
+  end_time: string;
+  modality: MeetingModality;
+  meeting_url: string | null;
+  location: string | null;
+  status: MeetingStatus;
+  objective: string | null;
+  notes: string | null;
+  result: string | null;
+  next_steps: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined relations
+  host_profile?: {
+    full_name: string | null;
+    email: string | null;
+  } | null;
+  advisor_profile?: {
+    full_name: string | null;
+    email: string | null;
+  } | null;
+  leads?: {
+    company_name: string;
+    contact_name: string;
+    phone: string | null;
+  } | null;
+}
+
