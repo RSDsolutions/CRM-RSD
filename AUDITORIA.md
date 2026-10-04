@@ -194,6 +194,24 @@ A continuación se detalla el análisis comparativo entre los requerimientos del
 
 ## 8. Historial de Versiones y Modificaciones
 
+### Versión 2.2.0 (04/10/2026) - Fase C (Diagnóstico, ADN de Empresa, Demos, Archivos .md y Tokens IA)
+- **Base de Datos & CLI:**
+  - Migración aplicada por Supabase CLI: `20261004000001_fase_c_diagnostico_dna_demos.sql`.
+  - Nueva tabla `diagnostics`: formulario estructurado de diagnóstico conducido por Robinson (negocio, problemas, flujos, solución preliminar, viabilidad).
+  - Nueva tabla `company_dna`: ADN de la empresa / cliente versionado con campo `consolidated_context` en Markdown (el asesor redacta el prompt maestro fuera del sistema, cumpliendo la regla de no generación automática).
+  - Nueva tabla `feasibility_reviews`: análisis de complejidad, riesgos técnicos y decisión de Robinson.
+  - Ampliación de `demos`: campos de criterios de aceptación, flujos clave, identidad visual recibida y trazabilidad de aprobación (`approval_status`, `approved_by`, `approved_at`, `approval_notes`).
+  - Nueva tabla `demo_files`: repositorio seguro de archivos Markdown (.md) requeridos con versión, tamaño y estado de revisión.
+  - Nueva tabla `ai_usage_windows`: modelo de registro manual de uso de IA por ventanas de 5 horas (porcentajes de 0% a 100%, selección rápida, soporte de ventanas sucesivas sin sumar límites).
+- **Lógica de Servidor & Server Actions:**
+  - `app/actions/diagnostics.ts`: `saveDiagnosticAction`, `getLeadDiagnosticAction`.
+  - `app/actions/dna.ts`: `saveCompanyDNAAction`, `getCompanyDNAAction`.
+  - `app/actions/feasibility.ts`: `saveFeasibilityReviewAction`, `getFeasibilityReviewAction`.
+  - `app/actions/demos.ts`: soporte ampliado con `submitDemoForApprovalAction`, `reviewDemoAction` (Robinson), `uploadDemoMarkdownAction`, `registerAIUsageWindowAction`, `recordDemoPresentationResultAction`.
+- **Experiencia de Usuario & Vistas:**
+  - Rediseño de `components/demos/demo-detail-view.tsx` organizado en 5 pestañas: Requerimientos, Archivos .md (con visor modal seguro), Tokens IA (con barra de progreso y botones 10%-100%), Aprobación de Robinson y Presentación al Cliente.
+  - Barra de progreso del ciclo de vida de la demo (`Borrador` → `En Revisión` → `Aprobada` → `Presentada` → `Aceptada`).
+
 ### Versión 2.1.0 (04/10/2026) - Fase B (Base Comercial, Seguimiento y Agenda Compartida)
 - **Base de Datos & CLI:**
   - Migración aplicada por Supabase CLI: `20261004000000_fase_b_base_comercial.sql`.

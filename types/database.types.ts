@@ -185,6 +185,19 @@ export type DemoStatus =
   | 'Convertida a proyecto'
   | 'Cancelada';
 
+export type DemoApprovalStatus =
+  | 'Borrador'
+  | 'Solicitud enviada'
+  | 'En revisión'
+  | 'Observada / requiere ajustes'
+  | 'Reenviada para revisión'
+  | 'Aprobada internamente'
+  | 'Lista para presentar'
+  | 'Presentada al cliente'
+  | 'Aceptada por el cliente'
+  | 'Rechazada por el cliente'
+  | 'Archivada';
+
 export interface Demo {
   id: string;
   lead_id: string | null;
@@ -195,11 +208,37 @@ export interface Demo {
   objective: string | null;
   demo_url: string | null;
   status: DemoStatus;
+  approval_status?: DemoApprovalStatus;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  approval_notes?: string | null;
+  demo_version?: number;
+  dna_version_used?: number | null;
+  diagnostic_id?: string | null;
+  functional_description?: string | null;
+  modules_included?: string | null;
+  main_flows?: string | null;
+  target_roles?: string | null;
+  visual_identity_received?: string | null;
+  design_references?: string | null;
+  test_data_used?: string | null;
+  known_limitations?: string | null;
+  acceptance_criteria?: string | null;
+  client_feedback_decision?: string | null;
+  client_feedback_notes?: string | null;
+  client_feedback_date?: string | null;
   presented_at: string | null;
   assigned_to: string | null;
   observations: string | null;
   created_at: string;
   updated_at: string;
+  // Joined relations
+  leads?: {
+    company_name: string;
+    contact_name: string;
+  } | null;
+  demo_files?: DemoFile[];
+  ai_usage_windows?: AIUsageWindow[];
 }
 
 // ─── DemoFeedback ─────────────────────────────────────────────
@@ -221,6 +260,137 @@ export interface DemoFeedback {
   created_at: string;
   updated_at: string;
 }
+
+// ─── Diagnóstico Comercial (Fase C) ───────────────────────────
+export interface Diagnostic {
+  id: string;
+  lead_id: string | null;
+  client_id: string | null;
+  meeting_id: string | null;
+  advisor_id: string | null;
+  conducted_by: string | null;
+  status: 'Borrador' | 'Completado';
+  business_activity: string | null;
+  business_model: string | null;
+  products_services: string | null;
+  team_size: string | null;
+  branches: string | null;
+  current_tools: string | null;
+  digitalization_level: string | null;
+  main_problem: string | null;
+  secondary_problems: string | null;
+  current_workflow: string | null;
+  bottlenecks: string | null;
+  risks_losses: string | null;
+  urgency_priority: string | null;
+  expected_outcome: string | null;
+  proposed_solution: string | null;
+  potential_modules: string | null;
+  user_roles: string | null;
+  required_integrations: string | null;
+  data_migration: string | null;
+  restrictions: string | null;
+  pending_validation: string | null;
+  preliminary_feasibility: string | null;
+  technical_risks: string | null;
+  client_pending_info: string | null;
+  next_action: string | null;
+  requires_demo: boolean;
+  internal_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── ADN de la Empresa / Cliente (Fase C) ──────────────────────
+export interface CompanyDNA {
+  id: string;
+  lead_id: string | null;
+  client_id: string | null;
+  version: number;
+  business_name: string;
+  industry_niche: string | null;
+  business_overview: string | null;
+  target_audience: string | null;
+  business_model: string | null;
+  operational_flow: string | null;
+  current_tools: string | null;
+  identified_pain_points: string | null;
+  desired_modules: string | null;
+  required_integrations: string | null;
+  visual_identity_notes: string | null;
+  design_preferences: string | null;
+  reference_systems: string | null;
+  constraints_budget: string | null;
+  consolidated_context: string | null; // Contexto en Markdown para redacción manual del prompt
+  status: 'Preliminar' | 'Confirmado' | 'En validación';
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── Viabilidad del Proyecto (Fase C) ─────────────────────────
+export interface FeasibilityReview {
+  id: string;
+  lead_id: string | null;
+  client_id: string | null;
+  problem_to_solve: string | null;
+  preliminary_scope: string | null;
+  estimated_complexity: 'Baja' | 'Media' | 'Alta' | 'Muy Alta';
+  required_modules: string | null;
+  integrations: string | null;
+  external_dependencies: string | null;
+  technical_risks: string | null;
+  operational_risks: string | null;
+  estimated_timeline: string | null;
+  preliminary_price_range: string | null;
+  technical_notes: string | null;
+  commercial_notes: string | null;
+  recommendation: 'Viable' | 'Viable con condiciones' | 'Requiere más información' | 'No viable';
+  robinson_decision: string | null;
+  conditions_justification: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── Archivos de Demo (.md) (Fase C) ──────────────────────────
+export interface DemoFile {
+  id: string;
+  demo_id: string;
+  file_name: string;
+  file_type: string;
+  file_content: string | null;
+  file_size_bytes: number;
+  is_required_by_robinson: boolean;
+  status: 'Requerido' | 'Recibido' | 'Revisado' | 'Observado' | 'Aprobado';
+  robinson_observations: string | null;
+  version: number;
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── Registro de Uso de IA / Tokens de Demo (Fase C) ──────────
+export interface AIUsageWindow {
+  id: string;
+  demo_id: string;
+  advisor_id: string;
+  provider: string;
+  model: string | null;
+  window_number: number;
+  window_duration_hours: number;
+  window_start_time: string;
+  window_end_time: string | null;
+  percentage_consumed: number; // 0 a 100
+  work_summary: string;
+  notes: string | null;
+  robinson_reviewed: boolean;
+  robinson_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 
 // ─── Proposal ─────────────────────────────────────────────────
 export type ProposalStatus =
