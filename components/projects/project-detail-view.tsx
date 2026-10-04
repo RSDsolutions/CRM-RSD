@@ -10,6 +10,8 @@ import {
   MaintenanceEvent,
   ProjectMilestone,
   ScopeChangeRequest,
+  QATestCase,
+  TrainingSession,
 } from '@/types/database.types';
 import { updateProjectStatusAction } from '@/app/actions/projects';
 import {
@@ -25,6 +27,8 @@ import {
   AlertOctagon,
   UserCheck,
   Code2,
+  FileCheck,
+  GraduationCap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { DeliveriesSection } from './deliveries-section';
@@ -32,6 +36,8 @@ import { PaymentsSection } from './payments-section';
 import { MaintenanceSection } from './maintenance-section';
 import { MilestonesSection } from './milestones-section';
 import { ScopeChangesSection } from './scope-changes-section';
+import { QASection } from './qa-section';
+import { TrainingSection } from './training-section';
 
 interface ProjectDetailViewProps {
   project: Project & {
@@ -43,10 +49,12 @@ interface ProjectDetailViewProps {
   maintenanceContract: (MaintenanceContract & { maintenance_events: MaintenanceEvent[] }) | null;
   milestones?: ProjectMilestone[];
   scopeChanges?: ScopeChangeRequest[];
+  testCases?: QATestCase[];
+  trainingSessions?: TrainingSession[];
   isAdmin: boolean;
 }
 
-type TabType = 'resumen' | 'hitos' | 'cambios' | 'entregas' | 'pagos' | 'mantenimiento';
+type TabType = 'resumen' | 'hitos' | 'cambios' | 'pruebas' | 'entregas' | 'capacitacion' | 'pagos' | 'mantenimiento';
 
 export function ProjectDetailView({
   project,
@@ -55,6 +63,8 @@ export function ProjectDetailView({
   maintenanceContract,
   milestones = [],
   scopeChanges = [],
+  testCases = [],
+  trainingSessions = [],
   isAdmin,
 }: ProjectDetailViewProps) {
   const [activeTab, setActiveTab] = useState<TabType>('resumen');
@@ -157,10 +167,12 @@ export function ProjectDetailView({
           { id: 'hitos', label: `Hitos (${milestones.length})`, icon: <Milestone className="w-4 h-4" /> },
           {
             id: 'cambios',
-            label: `Control de Cambios (${scopeChanges.length})${pendingScopeChangesCount > 0 ? ` [${pendingScopeChangesCount} Pend.]` : ''}`,
+            label: `Cambios (${scopeChanges.length})${pendingScopeChangesCount > 0 ? ` [${pendingScopeChangesCount} Pend.]` : ''}`,
             icon: <GitPullRequest className="w-4 h-4" />,
           },
+          { id: 'pruebas', label: `Pruebas QA (${testCases.length})`, icon: <FileCheck className="w-4 h-4" /> },
           { id: 'entregas', label: `Entregas (${deliveries.length})`, icon: <Box className="w-4 h-4" /> },
+          { id: 'capacitacion', label: `Capacitación (${trainingSessions.length})`, icon: <GraduationCap className="w-4 h-4" /> },
           { id: 'pagos', label: `Pagos (${payments.length})`, icon: <CreditCard className="w-4 h-4" /> },
           { id: 'mantenimiento', label: 'Mantenimiento', icon: <ShieldCheck className="w-4 h-4" /> },
         ].map(tab => (
@@ -267,11 +279,28 @@ export function ProjectDetailView({
           />
         )}
 
+        {activeTab === 'pruebas' && (
+          <QASection
+            projectId={project.id}
+            testCases={testCases}
+            isLocked={project.status === 'Completado'}
+          />
+        )}
+
         {activeTab === 'entregas' && (
           <DeliveriesSection
             projectId={project.id}
             deliveries={deliveries}
             isCompleted={project.status === 'Completado'}
+          />
+        )}
+
+        {activeTab === 'capacitacion' && (
+          <TrainingSection
+            projectId={project.id}
+            clientId={project.client_id}
+            sessions={trainingSessions}
+            isLocked={project.status === 'Completado'}
           />
         )}
 

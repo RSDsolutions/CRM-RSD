@@ -801,3 +801,131 @@ export interface Meeting {
   } | null;
 }
 
+// ─── Control de Calidad (QA) (Fase E) ─────────────────────────
+export type QATestStatus = 'Pendiente' | 'Aprobado' | 'Fallido' | 'Bloqueado';
+
+export interface QATestCase {
+  id: string;
+  project_id: string;
+  module_name: string;
+  test_case_title: string;
+  description: string | null;
+  expected_result: string;
+  actual_result: string | null;
+  status: QATestStatus;
+  evidence_url: string | null;
+  responsible_id: string | null;
+  executed_at: string | null;
+  observations: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── Sesión de Capacitación (Fase E) ──────────────────────────
+export interface TrainingSession {
+  id: string;
+  project_id: string;
+  client_id: string;
+  session_date: string;
+  modality: 'Virtual' | 'Presencial';
+  attendees: string;
+  topics_covered: string;
+  delivered_materials: string | null;
+  client_questions: string | null;
+  pending_items: string | null;
+  instructor_id: string | null;
+  client_confirmed: boolean;
+  confirmation_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── Tickets de Soporte e Incidencias (Fase E) ─────────────────
+export type SupportTicketCategory =
+  | 'Error en sistema'
+  | 'Consulta técnica'
+  | 'Solicitud de mejora'
+  | 'Fallo de acceso'
+  | 'Otro';
+
+export type SupportTicketPriority = 'Baja' | 'Media' | 'Alta' | 'Crítica';
+export type SupportTicketStatus = 'Abierto' | 'En diagnóstico' | 'En resolución' | 'Resuelto' | 'Cerrado';
+
+export interface SupportTicket {
+  id: string;
+  ticket_code: string;
+  client_id: string;
+  project_id: string | null;
+  requester_name: string;
+  category: SupportTicketCategory;
+  priority: SupportTicketPriority;
+  impact: string;
+  description: string;
+  evidence_url: string | null;
+  assigned_to: string | null;
+  status: SupportTicketStatus;
+  diagnosis: string | null;
+  solution: string | null;
+  resolved_at: string | null;
+  client_confirmed: boolean;
+  commercial_followup_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  clients?: {
+    company_name: string;
+  } | null;
+}
+
+// ─── Oportunidades Perdidas y Recuperación (Fase E) ───────────
+export type RecoveryStatus = 'En espera' | 'En reactivación' | 'Recuperado' | 'Definitivamente perdido';
+
+export interface LostOpportunity {
+  id: string;
+  lead_id: string;
+  loss_reason: string;
+  stage_lost: string;
+  competitor_chosen: string | null;
+  main_objection: string | null;
+  price_or_scope_reason: string | null;
+  loss_date: string;
+  responsible_id: string | null;
+  recovery_attempts_count: number;
+  last_recovery_date: string | null;
+  next_reactivation_date: string | null;
+  do_not_contact: boolean;
+  recovery_status: RecoveryStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  leads?: {
+    company_name: string;
+    contact_name: string;
+    phone: string | null;
+  } | null;
+}
+
+// ─── Referidos y Alianzas (Fase E) ────────────────────────────
+export type ReferralStatus = 'Registrado' | 'En contacto' | 'En negociación' | 'Convertido a cliente' | 'Descartado';
+
+export interface Referral {
+  id: string;
+  referrer_client_id: string | null;
+  referred_name: string;
+  referred_company: string | null;
+  referred_phone: string | null;
+  referred_email: string | null;
+  advisor_id: string | null;
+  status: ReferralStatus;
+  incentive_authorized: boolean;
+  incentive_details: string | null;
+  followup_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  referrer_client?: {
+    company_name: string;
+  } | null;
+}
+

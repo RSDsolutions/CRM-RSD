@@ -194,6 +194,28 @@ A continuación se detalla el análisis comparativo entre los requerimientos del
 
 ## 8. Historial de Versiones y Modificaciones
 
+### Versión 2.4.0 (04/10/2026) - Fase E (Control de Calidad, Entrega, Soporte, Retención y Referidos)
+- **Base de Datos & CLI:**
+  - Migración aplicada por Supabase CLI: `20261004000003_fase_e_qa_entrega_soporte_clientes.sql`.
+  - Nueva tabla `qa_test_cases`: control de calidad por módulos, resultado esperado vs obtenido, estados (`Pendiente`, `Aprobado`, `Fallido`, `Bloqueado`), evidencias y ejecutor.
+  - Nueva tabla `training_sessions`: registro formal de sesiones de inducción y transferencia de conocimiento (modalidad virtual/presencial, asistentes, temas, material y conformidad del cliente).
+  - Nueva tabla `support_tickets`: mesa de ayuda e incidencias post-entrega (código correlativo `TICK-YYYY-NNN`, prioridad, impacto, diagnóstico, solución, confirmación de cliente y seguimiento comercial permanente del asesor).
+  - Nueva tabla `lost_opportunities`: trazabilidad de oportunidades perdidas (motivo de pérdida, etapa, competidor, objeción, intentos de recuperación, fecha de reactivación y respeto a solicitudes de no contacto).
+  - Nueva tabla `referrals`: red de contactos recomendados por clientes con incentivos autorizados y seguimiento comercial.
+- **Lógica de Servidor & Server Actions:**
+  - `app/actions/qa.ts`: `createTestCaseAction`, `updateTestCaseResultAction`, `getProjectTestCasesAction`.
+  - `app/actions/training.ts`: `recordTrainingSessionAction`, `getProjectTrainingSessionsAction`.
+  - `app/actions/support.ts`: `createSupportTicketAction`, `updateSupportTicketStatusAction`, `getClientSupportTicketsAction`.
+  - `app/actions/retention-referrals.ts`: `recordLostOpportunityAction`, `updateRecoveryAttemptAction`, `createReferralAction`, `updateReferralStatusAction`, `getClientReferralsAction`.
+- **Experiencia de Usuario & Vistas:**
+  - `components/projects/qa-section.tsx`: Checklist de pruebas de control de calidad por módulo, indicador porcentual de aprobación (Pass Rate) y modal de registro de evidencia.
+  - `components/projects/training-section.tsx`: Bitácora de capacitaciones impartidas, control de materiales entregados y constancia de conformidad del cliente.
+  - `components/projects/project-detail-view.tsx`: Integración ampliada a 8 pestañas operativas (`Resumen`, `Hitos`, `Cambios`, `Pruebas QA`, `Entregas`, `Capacitación`, `Pagos`, `Mantenimiento`).
+  - `components/clients/support-tickets-section.tsx`: Mesa de ayuda y seguimiento comercial para clientes activos.
+  - `components/clients/referrals-section.tsx`: Gestión de referidos recomendados e incentivos formalmente autorizados.
+  - `components/clients/client-profile-view.tsx`: Navegación en pestañas para Información general, Tickets e Incidencias, y Red de Referidos.
+  - `components/kanban/lead-detail-sheet.tsx`: Formulario modal para declarar oportunidad perdida con motivo estructurado y fecha de reactivación futura.
+
 ### Versión 2.3.0 (04/10/2026) - Fase D (Propuestas Comerciales, Proyectos y Control de Cambios de Alcance)
 - **Base de Datos & CLI:**
   - Migración aplicada por Supabase CLI: `20261004000002_fase_d_propuestas_proyectos_alcance.sql`.

@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client';
 import { convertLeadToClientAction } from '@/app/actions/clients';
 import { getLeadActivitiesAction, createActivityAction } from '@/app/actions/activities';
 import { getLeadTasksAction, createTaskAction, updateTaskStatusAction } from '@/app/actions/tasks';
+import { recordLostOpportunityAction } from '@/app/actions/retention-referrals';
 import { 
   X, 
   User, 
@@ -25,7 +26,8 @@ import {
   CheckSquare,
   Plus,
   MessageSquare,
-  Tag
+  Tag,
+  UserX
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -62,6 +64,16 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+
+  // Oportunidad Perdida (Fase E)
+  const [showLossModal, setShowLossModal] = useState(false);
+  const [lossReason, setLossReason] = useState('Precio fuera de presupuesto');
+  const [competitor, setCompetitor] = useState('');
+  const [mainObjection, setMainObjection] = useState('');
+  const [priceReason, setPriceReason] = useState('');
+  const [reactivationDate, setReactivationDate] = useState('');
+  const [doNotContact, setDoNotContact] = useState(false);
+  const [isSavingLoss, setIsSavingLoss] = useState(false);
 
   useEffect(() => {
     if (lead) {
@@ -184,6 +196,33 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
     }
   };
 
+  const handleDeclareLoss = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingLoss(true);
+    try {
+      const res = await recordLostOpportunityAction({
+        lead_id: lead.id,
+        loss_reason: lossReason,
+        stage_lost: lead.status,
+        competitor_chosen: competitor,
+        main_objection: mainObjection,
+        price_or_scope_reason: priceReason,
+        next_reactivation_date: reactivationDate || undefined,
+        do_not_contact: doNotContact,
+      });
+      if (res.success) {
+        const updatedLead: Lead = { ...lead, status: 'Perdido' };
+        onLeadUpdated(updatedLead);
+        setShowLossModal(false);
+        onClose();
+      } else {
+        alert('Error: ' + res.error);
+      }
+    } finally {
+      setIsSavingLoss(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
       <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
@@ -216,6 +255,100 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
               <X className="w-5 h-5" />
             </button>
           </div>
+
+          {/* Modal de Declaración de Oportunidad Perdida */}
+          {showLossModal && (
+            <div className="p-5 bg-rose-950/20 border-b border-rose-500/30">
+              <form onSubmit={handleDeclareLoss} className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
+                    <UserX className="w-4 h-4" /> Declarar Oportunidad Perdida
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowLossModal(false)}
+                    className="text-slate-400 hover:text-white text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="text-[10px] text-slate-400 uppercase font-semibold">Motivo Principal *</label>
+                    <select
+                      value={lossReason}
+                      onChange={e => setLossReason(e.target.value)}
+                      className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                    >
+                      <option value="Precio fuera de presupuesto">Precio fuera de presupuesto</option>
+                      <option value="Eligió otra alternativa / competidor">Eligió otra alternativa</option>
+                      <option value="Proyecto cancelado internamente">Proyecto cancelado internamente</option>
+                      <option value="No responde / Incontactable">No responde / Incontactable</option>
+                      <option value="No viable técnicamente">No viable técnicamente</option>
+                      <option value="Otro">Otro</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 uppercase font-semibold">Competidor / Alternativa</label>
+                    <input
+                      type="text"
+                      value={competitor}
+                      onChange={e => setCompetitor(e.target.value)}
+                      placeholder="Ej. Software enlatado / Excel"
+                      className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] text-slate-400 uppercase font-semibold">Objeción o Justificación Detallada</label>
+                    <input
+                      type="text"
+                      value={mainObjection}
+                      onChange={e => setMainObjection(e.target.value)}
+                      placeholder="Ej. Presupuesto disponible era de $500 y requerían app nativa..."
+                      className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 uppercase font-semibold">Fecha para Reactivar</label>
+                    <input
+                      type="date"
+                      value={reactivationDate}
+                      onChange={e => setReactivationDate(e.target.value)}
+                      className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-4">
+                    <input
+                      type="checkbox"
+                      id="doNotContact"
+                      checked={doNotContact}
+                      onChange={e => setDoNotContact(e.target.checked)}
+                      className="rounded border-slate-700 text-rose-600 focus:ring-rose-500"
+                    />
+                    <label htmlFor="doNotContact" className="text-xs text-rose-300 font-semibold cursor-pointer">
+                      Solicitud expresa de No Contacto
+                    </label>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLossModal(false)}
+                    className="px-3 py-1 bg-slate-800 text-slate-300 rounded text-xs"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingLoss}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold disabled:opacity-50"
+                  >
+                    {isSavingLoss && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Confirmar Pérdida
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* Selector de pestañas */}
           <div className="flex border-b border-slate-800 bg-slate-950/80 text-xs">
@@ -537,9 +670,9 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
               </div>
             )}
 
-            {/* Conversión a Cliente (Fijo abajo si es elegible) */}
-            {!alreadyConverted && eligibleForConversion && (
-              <div className="pt-4 border-t border-slate-800">
+            {/* Conversión o Cierre de Oportunidad */}
+            <div className="pt-4 border-t border-slate-800 space-y-2">
+              {!alreadyConverted && eligibleForConversion && (
                 <button
                   onClick={handleConvertToClient}
                   disabled={isConverting}
@@ -558,8 +691,17 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
                     </>
                   )}
                 </button>
-              </div>
-            )}
+              )}
+
+              {!alreadyConverted && lead.status !== 'Perdido' && (
+                <button
+                  onClick={() => setShowLossModal(true)}
+                  className="w-full flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-rose-400 text-xs font-semibold transition"
+                >
+                  <UserX className="w-3.5 h-3.5" /> Declarar Oportunidad Perdida
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

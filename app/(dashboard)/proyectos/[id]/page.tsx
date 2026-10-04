@@ -19,7 +19,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const { data: roles } = await supabase.rpc('get_user_role');
   const isAdmin = roles === 'admin';
 
-  // Consultar todo el árbol de datos del proyecto (Fases B, C, D)
+  // Consultar todo el árbol de datos del proyecto (Fases B, C, D, E)
   const { data: project, error } = await supabase
     .from('projects')
     .select(`
@@ -28,6 +28,8 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
       proposals(id, proposal_number),
       project_milestones(*),
       scope_change_requests(*),
+      qa_test_cases(*),
+      training_sessions(*),
       project_deliveries(
         *,
         project_acceptances(*)
@@ -43,11 +45,13 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
 
   if (error || !project) notFound();
 
-  // Ordenar entregas, pagos, hitos y cambios de alcance
+  // Ordenar entregas, pagos, hitos, cambios de alcance, pruebas y capacitaciones
   const deliveries = (project.project_deliveries || []).sort((a: any, b: any) => b.delivery_number - a.delivery_number);
   const payments = (project.payments || []).sort((a: any, b: any) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime());
   const milestones = (project.project_milestones || []).sort((a: any, b: any) => (a.order_index ?? 0) - (b.order_index ?? 0));
   const scopeChanges = (project.scope_change_requests || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const testCases = (project.qa_test_cases || []).sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const trainingSessions = (project.training_sessions || []).sort((a: any, b: any) => new Date(b.session_date).getTime() - new Date(a.session_date).getTime());
   
   // Mantenimiento (asumimos 1 activo por simplificar el dashboard en esta fase)
   const maintenanceContract = project.maintenance_contracts && project.maintenance_contracts.length > 0
@@ -63,6 +67,8 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         maintenanceContract={maintenanceContract as any}
         milestones={milestones as any}
         scopeChanges={scopeChanges as any}
+        testCases={testCases as any}
+        trainingSessions={trainingSessions as any}
         isAdmin={isAdmin}
       />
     </main>
