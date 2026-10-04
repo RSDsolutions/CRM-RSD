@@ -194,6 +194,30 @@ A continuación se detalla el análisis comparativo entre los requerimientos del
 
 ## 8. Historial de Versiones y Modificaciones
 
+### Versión 2.5.0 (04/10/2026) - Fase F (Dashboard Directivo Avanzado, Indicadores Reales, Notificaciones Internas y Auditoría)
+- **Base de Datos & CLI:**
+  - Migración aplicada por Supabase CLI: `20261004000004_fase_f_notificaciones_internas.sql`.
+  - Nueva tabla `notifications`: sistema de alertas y eventos internos (lead asignado, tarea vencida, reunión agendada, demo solicitada/aprobada, cambio de alcance, bloqueo crítico, incidencias de soporte).
+  - RLS configurada para aislamiento de notificaciones de usuario y supervisión administrativa.
+- **Lógica de Servidor & Server Actions:**
+  - `app/actions/notifications.ts`: `getNotificationsAction`, `markNotificationAsReadAction`, `markAllNotificationsAsReadAction`, `createNotificationAction`.
+  - `app/actions/dashboard.ts`: `getComprehensiveDashboardMetricsAction` estructurado para computar indicadores 100% reales procedentes de tablas vivas:
+    - Pipeline comercial: leads nuevos, sin primera atención y distribución exacta por etapas.
+    - Agenda ejecutiva: diagnósticos agendados vs realizados por Robinson Solórzano.
+    - Demos & Tokens IA: ciclo de aprobación de Robinson, conteo de ventanas manuales de 5 horas y promedio de porcentaje declarado.
+    - Propuestas & Finanzas: propuestas pendientes vs aprobadas por Robinson y monto financiero total.
+    - Proyectos & Desarrollo: proyectos activos, completados y alertas de proyectos bloqueados.
+    - Operaciones & Tareas: tareas pendientes vs tareas atrasadas.
+    - Clientes & Mantenimiento: clientes activos y contratos por vencer en menos de 30 días.
+    - Mesa de ayuda: tickets abiertos e incidencias de prioridad crítica.
+    - Retención & Referidos: conteo de oportunidades perdidas y red de clientes referidos.
+    - Bitácora de auditoría: últimos 10 eventos sensibles registrados en `audit_logs` con usuario, acción y tabla.
+- **Experiencia de Usuario & Vistas:**
+  - `components/notifications/notifications-bell.tsx`: Campana interactiva con contador reactivo de no leídas, drawer de eventos recientes con enlaces a registros y opción de marcar como leídas.
+  - `components/navbar.tsx`: Integración permanente de la campana de notificaciones internas en la barra superior.
+  - `components/dashboard/executive-dashboard-view.tsx`: Panel directivo unificado con 4 macro-secciones de métricas, desglose visual del embudo de ventas y tabla de auditoría en vivo.
+  - `app/(dashboard)/dashboard/page.tsx`: Actualización a panel ejecutivo de alta fidelidad con verificación estricta de rol administrativo.
+
 ### Versión 2.4.0 (04/10/2026) - Fase E (Control de Calidad, Entrega, Soporte, Retención y Referidos)
 - **Base de Datos & CLI:**
   - Migración aplicada por Supabase CLI: `20261004000003_fase_e_qa_entrega_soporte_clientes.sql`.

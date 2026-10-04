@@ -23,6 +23,7 @@ import {
 import { useEffect, useState, useRef } from 'react';
 import { User } from '@supabase/supabase-js';
 import { UserRole } from '@/types/database.types';
+import { NotificationsBell } from '@/components/notifications/notifications-bell';
 
 interface NavGroup {
   label: string;
@@ -224,6 +225,8 @@ export function Navbar() {
               </span>
             </div>
           )}
+
+          <NotificationsBell />
 
           <button
             onClick={handleLogout}

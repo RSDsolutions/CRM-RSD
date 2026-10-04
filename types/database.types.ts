@@ -929,3 +929,17 @@ export interface Referral {
   } | null;
 }
 
+// ─── Notificaciones Internas (Fase F) ─────────────────────────
+export interface Notification {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: string;
+  link_url: string | null;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+}
+
+
