@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Lead, Activity, Task, LeadStatus, BUSINESS_NICHES, BusinessNiche, SoftwareType } from '@/types/database.types';
+import { Lead, Activity, Task, LeadStatus, BUSINESS_NICHES, BusinessNiche, SoftwareType, Diagnostic } from '@/types/database.types';
 import { createClient } from '@/utils/supabase/client';
 import { convertLeadToClientAction } from '@/app/actions/clients';
 import { getLeadActivitiesAction, createActivityAction } from '@/app/actions/activities';
@@ -9,6 +9,8 @@ import { getLeadTasksAction, createTaskAction, updateTaskStatusAction } from '@/
 import { recordLostOpportunityAction } from '@/app/actions/retention-referrals';
 import { getCompanyDNAAction, saveCompanyDNAAction } from '@/app/actions/dna';
 import { updateLeadDetailsAction, getComercialAdvisorsAction } from '@/app/actions/leads';
+import { getLeadDiagnosticAction } from '@/app/actions/diagnostics';
+import { DiagnosticModal } from '@/components/diagnostics/diagnostic-modal';
 import { CompanyDNA } from '@/types/database.types';
 import { 
   X, 
@@ -41,7 +43,11 @@ import {
   Globe,
   MapPin,
   MessageCircle,
-  ExternalLink
+  ExternalLink,
+  Stethoscope,
+  Workflow,
+  AlertTriangle,
+  Users
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -58,12 +64,17 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
   const supabase = createClient();
   const router = useRouter();
   
-  const [activeTab, setActiveTab] = useState<'info' | 'dna' | 'actividades' | 'tareas' | 'bitacora'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'diagnostico' | 'dna' | 'actividades' | 'tareas' | 'bitacora'>('info');
   const [logText, setLogText] = useState(lead?.interaction_log || '');
   const [isSaving, setIsSaving] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Diagnóstico Comercial
+  const [showDiagnosticModal, setShowDiagnosticModal] = useState(false);
+  const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(null);
+  const [loadingDiagnostic, setLoadingDiagnostic] = useState(false);
 
   // Modo Edición de Información del Prospecto/Cliente
   const [isEditingInfo, setIsEditingInfo] = useState(false);
@@ -134,9 +145,17 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
       loadActivities(lead.id);
       loadTasks(lead.id);
       loadDna(lead.id);
+      loadDiagnostic(lead.id);
       loadAdvisors();
     }
   }, [lead]);
+
+  const loadDiagnostic = async (leadId: string) => {
+    setLoadingDiagnostic(true);
+    const diag = await getLeadDiagnosticAction(leadId);
+    setDiagnostic(diag);
+    setLoadingDiagnostic(false);
+  };
 
   const loadAdvisors = async () => {
     const res = await getComercialAdvisorsAction();
@@ -478,6 +497,15 @@ ${dna.identified_pain_points || lead?.problem_description || lead?.main_need || 
               </Link>
               <button
                 type="button"
+                onClick={() => setShowDiagnosticModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500/20 to-violet-500/20 hover:from-indigo-500/30 hover:to-violet-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold whitespace-nowrap shadow-sm transition-all"
+                title="Levantar diagnóstico comercial completo del prospecto"
+              >
+                <Stethoscope className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Empezar Diagnóstico</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setActiveTab('actividades')}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold whitespace-nowrap transition-colors"
               >
@@ -606,6 +634,18 @@ ${dna.identified_pain_points || lead?.problem_description || lead?.main_need || 
               }`}
             >
               Resumen
+            </button>
+            <button
+              onClick={() => setActiveTab('diagnostico')}
+              className={`px-4 py-3 whitespace-nowrap text-center font-semibold border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                activeTab === 'diagnostico' ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5' : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+            >
+              <Stethoscope className="w-3.5 h-3.5" />
+              <span>Diagnóstico</span>
+              {diagnostic && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              )}
             </button>
             <button
               onClick={() => setActiveTab('dna')}
@@ -1213,6 +1253,188 @@ ${dna.identified_pain_points || lead?.problem_description || lead?.main_need || 
               </div>
             )}
 
+            {/* PESTAÑA: DIAGNÓSTICO COMERCIAL */}
+            {activeTab === 'diagnostico' && (
+              <div className="space-y-4">
+                {/* Banner de Presentación del Diagnóstico */}
+                <div className="bg-gradient-to-r from-indigo-950/40 to-violet-950/30 border border-indigo-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        Levantamiento Técnico & Comercial
+                      </span>
+                      {diagnostic && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
+                          diagnostic.status === 'Completado'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                            : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                        }`}>
+                          {diagnostic.status}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Stethoscope className="w-4 h-4 text-indigo-400" />
+                      Diagnóstico de Procesos & Dolores
+                    </h3>
+                    <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                      Permite entender a qué se dedica la empresa, qué problemas críticos sufren, cómo gestionan hoy (Excel, cuaderno, WhatsApp, etc.) y qué solución de software resolverá sus pérdidas.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowDiagnosticModal(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/25 transition-all whitespace-nowrap self-stretch sm:self-auto justify-center"
+                  >
+                    <Stethoscope className="w-4 h-4" />
+                    <span>{diagnostic ? 'Editar Diagnóstico' : 'Empezar Diagnóstico'}</span>
+                  </button>
+                </div>
+
+                {loadingDiagnostic ? (
+                  <div className="py-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                    <span>Cargando diagnóstico comercial...</span>
+                  </div>
+                ) : !diagnostic ? (
+                  /* Estado Vacío del Diagnóstico */
+                  <div className="p-8 sm:p-12 text-center rounded-2xl bg-slate-950/60 border border-dashed border-slate-800 flex flex-col items-center justify-center space-y-3">
+                    <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                      <Stethoscope className="w-7 h-7" />
+                    </div>
+                    <div className="space-y-1 max-w-md">
+                      <h4 className="text-sm font-bold text-white">Sin diagnóstico comercial registrado aún</h4>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Inicia el diagnóstico para documentar a qué se dedican, el dolor comercial crítico, cómo llevan hoy sus procesos (Excel, cuaderno, WhatsApp, etc.), tamaño de equipo y la solución a medida que necesitan.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowDiagnosticModal(true)}
+                      className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/20 transition-all"
+                    >
+                      <Stethoscope className="w-4 h-4" />
+                      <span>Empezar Diagnóstico Ahora</span>
+                    </button>
+                  </div>
+                ) : (
+                  /* Ficha Resumen del Diagnóstico Realizado */
+                  <div className="space-y-4 text-xs">
+                    {/* Giro de Negocio */}
+                    <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+                      <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800">
+                        <Building2 className="w-3.5 h-3.5 text-indigo-400" />
+                        <span className="font-bold text-white uppercase text-[10px] tracking-wider">Actividad & Giro de Negocio</span>
+                      </div>
+                      <p className="text-slate-200 leading-relaxed">{diagnostic.business_activity}</p>
+                      {diagnostic.business_model && (
+                        <p className="text-slate-400 text-[11px]"><strong className="text-slate-500">Modelo:</strong> {diagnostic.business_model}</p>
+                      )}
+                      {diagnostic.products_services && (
+                        <p className="text-slate-400 text-[11px]"><strong className="text-slate-500">Productos/Servicios:</strong> {diagnostic.products_services}</p>
+                      )}
+                    </div>
+
+                    {/* Dolor Comercial */}
+                    <div className="bg-slate-950/70 border border-rose-500/30 rounded-xl p-4 space-y-2">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-rose-500/20">
+                        <span className="font-bold text-rose-300 uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                          Dolor Comercial Principal
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          Urgencia {diagnostic.urgency_priority || 'Media'}
+                        </span>
+                      </div>
+                      <p className="text-slate-200 leading-relaxed font-medium">{diagnostic.main_problem}</p>
+                      {diagnostic.bottlenecks && (
+                        <div className="pt-1.5 border-t border-slate-800/60">
+                          <span className="text-[10px] uppercase font-bold text-slate-500 block mb-0.5">Cuellos de Botella:</span>
+                          <p className="text-slate-300 leading-relaxed">{diagnostic.bottlenecks}</p>
+                        </div>
+                      )}
+                      {diagnostic.risks_losses && (
+                        <div className="pt-1.5 border-t border-slate-800/60">
+                          <span className="text-[10px] uppercase font-bold text-rose-400 block mb-0.5">Riesgos / Pérdidas:</span>
+                          <p className="text-slate-300 leading-relaxed">{diagnostic.risks_losses}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Operación Actual & Herramientas */}
+                    <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+                      <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800">
+                        <Workflow className="w-3.5 h-3.5 text-indigo-400" />
+                        <span className="font-bold text-white uppercase text-[10px] tracking-wider">¿Cómo Llevan Hoy su Operación?</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px] pb-1">
+                        <div>
+                          <span className="text-slate-500 block">Herramientas Actuales:</span>
+                          <strong className="text-indigo-300">{diagnostic.current_tools || 'Excel'}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block">Digitalización:</span>
+                          <span className="text-slate-300">{diagnostic.digitalization_level || 'Bajo'}</span>
+                        </div>
+                      </div>
+                      {diagnostic.current_workflow && (
+                        <div className="pt-1.5 border-t border-slate-800/60">
+                          <span className="text-[10px] uppercase font-bold text-slate-500 block mb-0.5">Flujo Operativo Actual:</span>
+                          <p className="text-slate-300 leading-relaxed">{diagnostic.current_workflow}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Equipo & Personas */}
+                    <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2">
+                      <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800">
+                        <Users className="w-3.5 h-3.5 text-indigo-400" />
+                        <span className="font-bold text-white uppercase text-[10px] tracking-wider">Equipo & Usuarios</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-slate-500 block">Tamaño del Equipo:</span>
+                          <strong className="text-white">{diagnostic.team_size || 'No especificado'}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block">Roles Involucrados:</span>
+                          <span className="text-slate-300">{diagnostic.user_roles || 'No especificado'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Solución & Próximo Paso */}
+                    <div className="bg-slate-950/70 border border-indigo-500/30 rounded-xl p-4 space-y-2">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-indigo-500/20">
+                        <span className="font-bold text-indigo-300 uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+                          <Laptop className="w-3.5 h-3.5" />
+                          Solución Recomendada & Siguiente Paso
+                        </span>
+                        {diagnostic.requires_demo && (
+                          <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                            Requiere Demo Técnica
+                          </span>
+                        )}
+                      </div>
+                      {diagnostic.proposed_solution && (
+                        <p className="text-white font-medium text-xs">{diagnostic.proposed_solution}</p>
+                      )}
+                      {diagnostic.potential_modules && (
+                        <p className="text-slate-400 text-[11px]"><strong className="text-slate-500">Módulos sugeridos:</strong> {diagnostic.potential_modules}</p>
+                      )}
+                      {diagnostic.next_action && (
+                        <div className="pt-1.5 border-t border-slate-800/60 flex items-center gap-1.5 text-indigo-300">
+                          <Clock className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                          <span><strong>Próximo Paso:</strong> {diagnostic.next_action}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* PESTAÑA 2: CLIENT DNA */}
             {activeTab === 'dna' && (
               <div className="space-y-4">
@@ -1565,6 +1787,19 @@ ${dna.identified_pain_points || lead?.problem_description || lead?.main_need || 
           </div>
         </div>
       </div>
+
+      {/* ─── MODAL DE DIAGNÓSTICO COMERCIAL (CON DIFUMINADO PROFUNDO) ─── */}
+      <DiagnosticModal
+        isOpen={showDiagnosticModal}
+        lead={lead}
+        onClose={() => setShowDiagnosticModal(false)}
+        onDiagnosticSaved={(savedDiag, updatedLead) => {
+          setDiagnostic(savedDiag);
+          if (updatedLead) {
+            onLeadUpdated(updatedLead);
+          }
+        }}
+      />
     </div>
   );
 }

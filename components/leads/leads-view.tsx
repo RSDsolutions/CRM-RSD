@@ -26,7 +26,8 @@ import {
   TrendingUp,
   Tag,
   MapPin,
-  CheckCircle2
+  CheckCircle2,
+  Stethoscope
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -487,6 +488,17 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                       {/* Acciones */}
                       <td className="px-5 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedLead(lead);
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-600 border border-indigo-500/20 hover:border-indigo-500 text-indigo-300 hover:text-white text-xs font-semibold transition-all shadow-sm"
+                            title="Empezar o ver diagnóstico comercial"
+                          >
+                            <Stethoscope className="w-3.5 h-3.5 text-indigo-400 group-hover:text-white" />
+                            <span className="hidden md:inline">Diagnóstico</span>
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
