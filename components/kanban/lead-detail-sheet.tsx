@@ -7,6 +7,8 @@ import { convertLeadToClientAction } from '@/app/actions/clients';
 import { getLeadActivitiesAction, createActivityAction } from '@/app/actions/activities';
 import { getLeadTasksAction, createTaskAction, updateTaskStatusAction } from '@/app/actions/tasks';
 import { recordLostOpportunityAction } from '@/app/actions/retention-referrals';
+import { getCompanyDNAAction, saveCompanyDNAAction } from '@/app/actions/dna';
+import { CompanyDNA } from '@/types/database.types';
 import { 
   X, 
   User, 
@@ -27,7 +29,8 @@ import {
   Plus,
   MessageSquare,
   Tag,
-  UserX
+  UserX,
+  Dna
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -44,7 +47,7 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
   const supabase = createClient();
   const router = useRouter();
   
-  const [activeTab, setActiveTab] = useState<'info' | 'actividades' | 'tareas' | 'bitacora'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'dna' | 'actividades' | 'tareas' | 'bitacora'>('info');
   const [logText, setLogText] = useState(lead?.interaction_log || '');
   const [isSaving, setIsSaving] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
@@ -76,14 +79,35 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
   const [doNotContact, setDoNotContact] = useState(false);
   const [isSavingLoss, setIsSavingLoss] = useState(false);
 
+  // DNA
+  const [dna, setDna] = useState<Partial<CompanyDNA> | null>(null);
+  const [loadingDna, setLoadingDna] = useState(false);
+  const [savingDna, setSavingDna] = useState(false);
+
   useEffect(() => {
     if (lead) {
       setLogText(lead.interaction_log);
       setStatusMessage(null);
       loadActivities(lead.id);
       loadTasks(lead.id);
+      loadDna(lead.id);
     }
   }, [lead]);
+
+  const loadDna = async (leadId: string) => {
+    setLoadingDna(true);
+    const data = await getCompanyDNAAction(leadId);
+    if (data) {
+      setDna(data);
+    } else {
+      setDna({
+        lead_id: leadId,
+        business_name: lead?.company_name || '',
+        industry_niche: typeof lead?.niche === 'string' ? lead.niche : '',
+      });
+    }
+    setLoadingDna(false);
+  };
 
   const loadActivities = async (leadId: string) => {
     setLoadingActivities(true);
@@ -249,6 +273,22 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
     }
   };
 
+  const handleSaveDna = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dna) return;
+    setSavingDna(true);
+    setStatusMessage(null);
+    const res = await saveCompanyDNAAction(dna);
+    if (res.success && res.dna) {
+      setDna(res.dna);
+      setStatusMessage({ type: 'success', text: 'DNA del Cliente guardado correctamente.' });
+      setTimeout(() => setStatusMessage(null), 3000);
+    } else {
+      setStatusMessage({ type: 'error', text: res.error || 'Error al guardar el DNA.' });
+    }
+    setSavingDna(false);
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
       <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
@@ -377,18 +417,26 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
           )}
 
           {/* Selector de pestañas */}
-          <div className="flex border-b border-slate-800 bg-slate-950/80 text-xs">
+          <div className="flex overflow-x-auto border-b border-slate-800 bg-slate-950/80 text-xs no-scrollbar">
             <button
               onClick={() => setActiveTab('info')}
-              className={`flex-1 py-2.5 text-center font-semibold border-b-2 transition-colors ${
+              className={`px-4 py-2.5 whitespace-nowrap text-center font-semibold border-b-2 transition-colors ${
                 activeTab === 'info' ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5' : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
               General
             </button>
             <button
+              onClick={() => setActiveTab('dna')}
+              className={`px-4 py-2.5 whitespace-nowrap text-center font-semibold border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                activeTab === 'dna' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400 hover:text-white'
+              }`}
+            >
+              <Dna className="w-3.5 h-3.5" /> DNA del Cliente
+            </button>
+            <button
               onClick={() => setActiveTab('actividades')}
-              className={`flex-1 py-2.5 text-center font-semibold border-b-2 transition-colors ${
+              className={`px-4 py-2.5 whitespace-nowrap text-center font-semibold border-b-2 transition-colors ${
                 activeTab === 'actividades' ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5' : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
@@ -396,7 +444,7 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
             </button>
             <button
               onClick={() => setActiveTab('tareas')}
-              className={`flex-1 py-2.5 text-center font-semibold border-b-2 transition-colors ${
+              className={`px-4 py-2.5 whitespace-nowrap text-center font-semibold border-b-2 transition-colors ${
                 activeTab === 'tareas' ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5' : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
@@ -404,7 +452,7 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
             </button>
             <button
               onClick={() => setActiveTab('bitacora')}
-              className={`flex-1 py-2.5 text-center font-semibold border-b-2 transition-colors ${
+              className={`px-4 py-2.5 whitespace-nowrap text-center font-semibold border-b-2 transition-colors ${
                 activeTab === 'bitacora' ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5' : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
@@ -554,6 +602,114 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
                     Abrir Agenda y Reservar con Robinson
                   </Link>
                 </div>
+              </div>
+            )}
+
+            {/* PESTAÑA: DNA DEL CLIENTE */}
+            {activeTab === 'dna' && (
+              <div className="space-y-4">
+                <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-4">
+                  <h3 className="text-emerald-400 font-bold flex items-center gap-2 mb-1">
+                    <Dna className="w-4 h-4" /> DNA del Cliente
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Captura el modelo de negocio, flujos y dolores principales para preparar una propuesta o demo a medida.
+                  </p>
+                </div>
+
+                {loadingDna ? (
+                  <div className="py-6 text-center text-xs text-slate-500">Cargando DNA...</div>
+                ) : (
+                  <form onSubmit={handleSaveDna} className="space-y-4 text-xs">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-400 mb-1 font-semibold">Nombre del Negocio</label>
+                        <input
+                          type="text"
+                          value={dna?.business_name || ''}
+                          onChange={e => setDna(prev => prev ? { ...prev, business_name: e.target.value } : null)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 mb-1 font-semibold">Nicho / Industria</label>
+                        <input
+                          type="text"
+                          value={dna?.industry_niche || ''}
+                          onChange={e => setDna(prev => prev ? { ...prev, industry_niche: e.target.value } : null)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 mb-1 font-semibold">Resumen del Negocio (A qué se dedican)</label>
+                      <textarea
+                        rows={2}
+                        value={dna?.business_overview || ''}
+                        onChange={e => setDna(prev => prev ? { ...prev, business_overview: e.target.value } : null)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                        placeholder="Ej. Importadora de insumos médicos con 3 sucursales..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 mb-1 font-semibold">Dolores / Problemas Principales</label>
+                      <textarea
+                        rows={2}
+                        value={dna?.identified_pain_points || ''}
+                        onChange={e => setDna(prev => prev ? { ...prev, identified_pain_points: e.target.value } : null)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                        placeholder="Ej. Pierden información en Excel, no tienen control de inventario en tiempo real..."
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-400 mb-1 font-semibold">Herramientas Actuales</label>
+                        <input
+                          type="text"
+                          value={dna?.current_tools || ''}
+                          onChange={e => setDna(prev => prev ? { ...prev, current_tools: e.target.value } : null)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                          placeholder="Excel, WhatsApp, Cuaderno"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 mb-1 font-semibold">Módulos Deseados</label>
+                        <input
+                          type="text"
+                          value={dna?.desired_modules || ''}
+                          onChange={e => setDna(prev => prev ? { ...prev, desired_modules: e.target.value } : null)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                          placeholder="Inventario, CRM, Facturación"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 mb-1 font-semibold">Flujo Operativo Actual</label>
+                      <textarea
+                        rows={3}
+                        value={dna?.operational_flow || ''}
+                        onChange={e => setDna(prev => prev ? { ...prev, operational_flow: e.target.value } : null)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                        placeholder="El cliente escribe por WhatsApp, el vendedor anota en Excel, luego pasan la orden a bodega..."
+                      />
+                    </div>
+
+                    <div className="flex justify-end pt-2 border-t border-slate-800">
+                      <button
+                        type="submit"
+                        disabled={savingDna}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors disabled:opacity-50"
+                      >
+                        {savingDna ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        Guardar DNA
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             )}
 
