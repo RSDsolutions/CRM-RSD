@@ -155,10 +155,36 @@ export async function bookMeetingSlotAction(payload: {
       const startDate = new Date(payload.start_time);
       const endDate = new Date(payload.end_time);
       
-      const dayOfWeek = startDate.getDay() || 7; // getDay: 0=Dom, 1=Lun. Convertimos Dom a 7
-      
-      const startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
-      const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
+      // Convertir a zona horaria local de Colombia/Ecuador (UTC-5) para comparar con la BD
+      const getBogotaParts = (date: Date) => {
+        const str = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Bogota',
+          hour: 'numeric',
+          minute: 'numeric',
+          hour12: false,
+          weekday: 'short',
+        }).format(date);
+        // str "Wed, 15:30" or "15:30"
+        const dayMap: Record<string, number> = { 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 7 };
+        const dayMatch = str.match(/([a-zA-Z]+)/);
+        const dayOfWeek = dayMatch ? dayMap[dayMatch[1]] || 7 : 7;
+        
+        const timeMatch = str.match(/(\d+):(\d+)/);
+        let h = 0, m = 0;
+        if (timeMatch) {
+          h = parseInt(timeMatch[1], 10);
+          if (h === 24) h = 0; // Fix edge case
+          m = parseInt(timeMatch[2], 10);
+        }
+        return { dayOfWeek, minutes: h * 60 + m };
+      };
+
+      const startParts = getBogotaParts(startDate);
+      const endParts = getBogotaParts(endDate);
+
+      const dayOfWeek = startParts.dayOfWeek;
+      const startMinutes = startParts.minutes;
+      const endMinutes = endParts.minutes;
 
       let isWithinWeekly = false;
       for (const schedule of weeklyData) {
