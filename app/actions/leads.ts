@@ -16,6 +16,24 @@ export interface DuplicateCheckResult {
 }
 
 /**
+ * Obtiene la lista de asesores comerciales y administradores.
+ */
+export async function getComercialAdvisorsAction() {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .in('role', ['admin', 'comercial'])
+    .order('full_name', { ascending: true });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, advisors: data.map(d => d.full_name) as string[] };
+}
+
+/**
  * Verifica duplicados por teléfono o correo electrónico antes de crear un prospecto.
  */
 export async function checkLeadDuplicatesAction(

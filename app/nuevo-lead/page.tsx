@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { BUSINESS_NICHES, BusinessNiche, SoftwareType } from '@/types/database.types';
-import { checkLeadDuplicatesAction, createEnrichedLeadAction, DuplicateCheckResult } from '@/app/actions/leads';
+import { checkLeadDuplicatesAction, createEnrichedLeadAction, getComercialAdvisorsAction, DuplicateCheckResult } from '@/app/actions/leads';
 
 const leadSchema = z.object({
   company_name: z.string().min(2, 'El nombre comercial de la empresa es obligatorio'),
@@ -91,6 +91,17 @@ export default function NuevoLeadPage() {
   const [duplicateWarning, setDuplicateWarning] = useState<DuplicateCheckResult | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
+  const [advisors, setAdvisors] = useState<string[]>(['Robinson Solórzano']);
+
+  useEffect(() => {
+    async function loadAdvisors() {
+      const res = await getComercialAdvisorsAction();
+      if (res.success && res.advisors && res.advisors.length > 0) {
+        setAdvisors(res.advisors);
+      }
+    }
+    loadAdvisors();
+  }, []);
 
   const {
     register,
@@ -685,12 +696,14 @@ export default function NuevoLeadPage() {
                     <label className="block text-xs font-medium text-slate-300 mb-1">
                       Asesor Responsable <span className="text-rose-500">*</span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       {...register('assigned_to')}
-                      placeholder="Nombre del asesor"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    >
+                      {advisors.map(adv => (
+                        <option key={adv} value={adv}>{adv}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
