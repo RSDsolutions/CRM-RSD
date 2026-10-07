@@ -34,7 +34,7 @@ import { BUSINESS_NICHES, BusinessNiche, SoftwareType } from '@/types/database.t
 import { checkLeadDuplicatesAction, createEnrichedLeadAction, getCurrentUserAdvisorAction, DuplicateCheckResult } from '@/app/actions/leads';
 
 const leadSchema = z.object({
-  company_name: z.string().min(2, 'El nombre comercial de la empresa es obligatorio'),
+  company_name: z.string().trim().min(2, 'El nombre comercial de la empresa es obligatorio'),
   legal_name: z.string().optional(),
   tax_id: z.string().optional(),
   niche: z.string().min(2, 'Selecciona un nicho empresarial'),
@@ -43,11 +43,15 @@ const leadSchema = z.object({
   website: z.string().optional(),
   social_media: z.string().optional(),
   
-  contact_name: z.string().min(2, 'El nombre del contacto es obligatorio'),
+  contact_name: z.string().trim().min(2, 'El nombre del contacto es obligatorio'),
   contact_role: z.string().optional(),
-  phone: z.string().min(7, 'El teléfono debe tener al menos 7 dígitos').optional().or(z.literal('')),
+  phone: z.string().optional().refine(val => !val || val.trim().length === 0 || val.trim().length >= 7, {
+    message: 'El teléfono debe tener al menos 7 dígitos',
+  }),
   whatsapp: z.string().optional(),
-  email: z.string().email('Correo electrónico inválido').optional().or(z.literal('')),
+  email: z.string().optional().refine(val => !val || val.trim().length === 0 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim()), {
+    message: 'Correo electrónico inválido',
+  }),
   contact_preference: z.string().default('WhatsApp'),
 
   software_type: z.enum([
@@ -67,7 +71,7 @@ const leadSchema = z.object({
   lead_source: z.string().default('Meta/Facebook'),
   campaign: z.string().optional(),
   priority: z.enum(['Alta', 'Media', 'Baja']).default('Media'),
-  assigned_to: z.string().min(2, 'Ingresa el asesor responsable'),
+  assigned_to: z.string().optional().default('Robinson Solórzano'),
   next_action: z.string().default('Primer contacto y calificación comercial'),
   next_followup_date: z.string().optional(),
 
@@ -91,6 +95,7 @@ export default function NuevoLeadPage() {
   const [activeTab, setActiveTab] = useState<'empresa' | 'contacto' | 'necesidad' | 'comercial'>('empresa');
   const [duplicateWarning, setDuplicateWarning] = useState<DuplicateCheckResult | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [validationWarning, setValidationWarning] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
   const [currentAdvisor, setCurrentAdvisor] = useState<string>('Robinson Solórzano');
   const [loadingAdvisor, setLoadingAdvisor] = useState<boolean>(true);
@@ -100,9 +105,11 @@ export default function NuevoLeadPage() {
     handleSubmit,
     watch,
     setValue,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<LeadFormData>({
     resolver: zodResolver(leadSchema),
+    mode: 'onBlur',
     defaultValues: {
       company_name: '',
       legal_name: '',
@@ -163,57 +170,154 @@ export default function NuevoLeadPage() {
     }
   };
 
+  const goToTab = async (targetTab: 'empresa' | 'contacto' | 'necesidad' | 'comercial') => {
+    const tabOrder: ('empresa' | 'contacto' | 'necesidad' | 'comercial')[] = ['empresa', 'contacto', 'necesidad', 'comercial'];
+    const currentIndex = tabOrder.indexOf(activeTab);
+    const targetIndex = tabOrder.indexOf(targetTab);
+
+    if (targetIndex > currentIndex) {
+      if (activeTab === 'empresa') {
+        const valid = await trigger(['company_name', 'niche']);
+        if (!valid) {
+          setValidationWarning('Completa los campos obligatorios de la empresa antes de avanzar.');
+          return;
+        }
+      } else if (activeTab === 'contacto') {
+        const valid = await trigger(['contact_name', 'phone', 'email']);
+        if (!valid) {
+          setValidationWarning('Completa los datos de contacto antes de avanzar.');
+          return;
+        }
+      } else if (activeTab === 'necesidad') {
+        const valid = await trigger(['software_type']);
+        if (!valid) {
+          setValidationWarning('Selecciona el tipo de software solicitado.');
+          return;
+        }
+      }
+    }
+    setValidationWarning(null);
+    setActiveTab(targetTab);
+  };
+
+  const onInvalid = (fieldErrors: any) => {
+    console.warn('Errores de validación al guardar prospecto:', fieldErrors);
+
+    if (
+      fieldErrors.company_name ||
+      fieldErrors.niche ||
+      fieldErrors.legal_name ||
+      fieldErrors.tax_id ||
+      fieldErrors.city ||
+      fieldErrors.province ||
+      fieldErrors.website ||
+      fieldErrors.social_media
+    ) {
+      setActiveTab('empresa');
+      setValidationWarning(
+        fieldErrors.company_name?.message ||
+        fieldErrors.niche?.message ||
+        'Por favor completa los datos obligatorios de la empresa.'
+      );
+    } else if (
+      fieldErrors.contact_name ||
+      fieldErrors.phone ||
+      fieldErrors.email ||
+      fieldErrors.contact_role ||
+      fieldErrors.whatsapp ||
+      fieldErrors.contact_preference
+    ) {
+      setActiveTab('contacto');
+      setValidationWarning(
+        fieldErrors.contact_name?.message ||
+        fieldErrors.phone?.message ||
+        fieldErrors.email?.message ||
+        'Por favor completa los datos obligatorios de contacto.'
+      );
+    } else if (
+      fieldErrors.software_type ||
+      fieldErrors.current_management_method ||
+      fieldErrors.team_size ||
+      fieldErrors.main_need ||
+      fieldErrors.problem_description ||
+      fieldErrors.reference_budget
+    ) {
+      setActiveTab('necesidad');
+      setValidationWarning(
+        fieldErrors.software_type?.message ||
+        'Por favor revisa la información de necesidades del software.'
+      );
+    } else {
+      setActiveTab('comercial');
+      setValidationWarning(
+        fieldErrors.appointment_date?.message ||
+        fieldErrors.assigned_to?.message ||
+        'Por favor completa la fecha de diagnóstico o revisa los datos comerciales.'
+      );
+    }
+  };
+
   const onSubmit = async (data: LeadFormData) => {
     setServerError(null);
+    setValidationWarning(null);
     setSuccess(false);
 
-    const payload = {
-      company_name: data.company_name.trim(),
-      legal_name: data.legal_name?.trim() || null,
-      tax_id: data.tax_id?.trim() || null,
-      niche: data.niche as BusinessNiche,
-      city: data.city?.trim() || null,
-      province: data.province?.trim() || null,
-      website: data.website?.trim() || null,
-      social_media: data.social_media?.trim() || null,
-      contact_name: data.contact_name.trim(),
-      contact_role: data.contact_role?.trim() || null,
-      phone: data.phone?.trim() || null,
-      whatsapp: data.whatsapp?.trim() || data.phone?.trim() || null,
-      email: data.email?.trim() || null,
-      contact_preference: data.contact_preference,
-      software_type: data.software_type as SoftwareType,
-      current_management_method: data.current_management_method,
-      team_size: data.team_size || null,
-      main_need: data.main_need?.trim() || null,
-      problem_description: data.problem_description?.trim() || null,
-      reference_budget: data.reference_budget?.trim() || null,
-      interaction_log: `Ingreso inicial en CRM. Método actual: ${data.current_management_method}. Necesidad: ${data.main_need || 'Sin especificar'}.`,
-      lead_source: data.lead_source as any,
-      campaign: data.campaign?.trim() || null,
-      priority: data.priority,
-      assigned_to: data.assigned_to.trim(),
-      next_action: data.next_action.trim(),
-      next_followup_date: data.next_followup_date ? new Date(data.next_followup_date).toISOString() : null,
-      appointment_scheduled: data.appointment_scheduled,
-      appointment_date: data.appointment_scheduled && data.appointment_date 
-        ? new Date(data.appointment_date).toISOString() 
-        : null,
-      status: (data.appointment_scheduled ? 'Diagnóstico' : 'Nuevo') as any,
-    };
+    try {
+      const safeToIso = (val?: string | null) => {
+        if (!val || !val.trim()) return null;
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? null : d.toISOString();
+      };
 
-    const result = await createEnrichedLeadAction(payload);
+      const payload = {
+        company_name: data.company_name.trim(),
+        legal_name: data.legal_name?.trim() || null,
+        tax_id: data.tax_id?.trim() || null,
+        niche: data.niche as BusinessNiche,
+        city: data.city?.trim() || null,
+        province: data.province?.trim() || null,
+        website: data.website?.trim() || null,
+        social_media: data.social_media?.trim() || null,
+        contact_name: data.contact_name.trim(),
+        contact_role: data.contact_role?.trim() || null,
+        phone: data.phone?.trim() || null,
+        whatsapp: data.whatsapp?.trim() || data.phone?.trim() || null,
+        email: data.email?.trim() || null,
+        contact_preference: data.contact_preference,
+        software_type: data.software_type as SoftwareType,
+        current_management_method: data.current_management_method,
+        team_size: data.team_size?.trim() || null,
+        main_need: data.main_need?.trim() || null,
+        problem_description: data.problem_description?.trim() || null,
+        reference_budget: data.reference_budget?.trim() || null,
+        interaction_log: `Ingreso inicial en CRM. Método actual: ${data.current_management_method}. Necesidad: ${data.main_need?.trim() || 'Sin especificar'}.`,
+        lead_source: data.lead_source as any,
+        campaign: data.campaign?.trim() || null,
+        priority: data.priority,
+        assigned_to: data.assigned_to?.trim() || currentAdvisor || 'Robinson Solórzano',
+        next_action: data.next_action?.trim() || 'Primer contacto y calificación comercial',
+        next_followup_date: safeToIso(data.next_followup_date),
+        appointment_scheduled: Boolean(data.appointment_scheduled),
+        appointment_date: data.appointment_scheduled ? safeToIso(data.appointment_date) : null,
+        status: (data.appointment_scheduled ? 'Diagnóstico' : 'Nuevo') as any,
+      };
 
-    if (!result.success) {
-      setServerError(result.error || 'Ocurrió un error al guardar el prospecto.');
-      return;
+      const result = await createEnrichedLeadAction(payload);
+
+      if (!result.success) {
+        setServerError(result.error || 'Ocurrió un error al guardar el prospecto.');
+        return;
+      }
+
+      setSuccess(true);
+      setTimeout(() => {
+        router.push('/');
+        router.refresh();
+      }, 1200);
+    } catch (err: any) {
+      console.error('Error al guardar prospecto:', err);
+      setServerError(err?.message || 'Error inesperado al intentar guardar el prospecto.');
     }
-
-    setSuccess(true);
-    setTimeout(() => {
-      router.push('/');
-      router.refresh();
-    }, 1200);
   };
 
   return (
@@ -274,40 +378,57 @@ export default function NuevoLeadPage() {
             <div className="mt-6 pt-2">
               <div className="grid grid-cols-4 gap-2">
                 {[
-                  { id: 'empresa', step: 1, label: 'Empresa', icon: Building2 },
-                  { id: 'contacto', step: 2, label: 'Contacto', icon: User },
-                  { id: 'necesidad', step: 3, label: 'Necesidad', icon: Briefcase },
-                  { id: 'comercial', step: 4, label: 'Comercial', icon: Clock },
+                  { id: 'empresa' as const, step: 1, label: 'Empresa', icon: Building2 },
+                  { id: 'contacto' as const, step: 2, label: 'Contacto', icon: User },
+                  { id: 'necesidad' as const, step: 3, label: 'Necesidad', icon: Briefcase },
+                  { id: 'comercial' as const, step: 4, label: 'Comercial', icon: Clock },
                 ].map((s) => {
                   const Icon = s.icon;
                   const isCurrent = activeTab === s.id;
-                  const isCompleted = 
+                  
+                  const hasEmpresaErrors = Boolean(errors.company_name || errors.niche);
+                  const hasContactoErrors = Boolean(errors.contact_name || errors.phone || errors.email);
+                  const hasNecesidadErrors = Boolean(errors.software_type);
+                  const hasComercialErrors = Boolean(errors.appointment_date || errors.assigned_to);
+
+                  const hasError = 
+                    (s.id === 'empresa' && hasEmpresaErrors) ||
+                    (s.id === 'contacto' && hasContactoErrors) ||
+                    (s.id === 'necesidad' && hasNecesidadErrors) ||
+                    (s.id === 'comercial' && hasComercialErrors);
+
+                  const isCompleted = !hasError && (
                     (s.step === 1 && (activeTab === 'contacto' || activeTab === 'necesidad' || activeTab === 'comercial')) ||
                     (s.step === 2 && (activeTab === 'necesidad' || activeTab === 'comercial')) ||
-                    (s.step === 3 && activeTab === 'comercial');
+                    (s.step === 3 && activeTab === 'comercial')
+                  );
 
                   return (
                     <button
                       key={s.id}
                       type="button"
-                      onClick={() => setActiveTab(s.id as any)}
+                      onClick={() => goToTab(s.id)}
                       className="group flex flex-col items-center sm:items-start text-left text-xs transition-all"
                     >
                       <div className="flex items-center gap-2 w-full mb-1.5">
                         <div
                           className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs transition-colors ${
-                            isCurrent
+                            hasError
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50 ring-2 ring-rose-500/30'
+                              : isCurrent
                               ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400/40'
                               : isCompleted
                               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                               : 'bg-slate-800 text-slate-500 border border-slate-700'
                           }`}
                         >
-                          {isCompleted ? '✓' : s.step}
+                          {hasError ? '!' : isCompleted ? '✓' : s.step}
                         </div>
                         <span
                           className={`hidden sm:inline font-semibold truncate ${
-                            isCurrent
+                            hasError
+                              ? 'text-rose-400 font-bold'
+                              : isCurrent
                               ? 'text-white'
                               : isCompleted
                               ? 'text-slate-300'
@@ -319,7 +440,9 @@ export default function NuevoLeadPage() {
                       </div>
                       <div
                         className={`w-full h-1 rounded-full transition-colors ${
-                          isCurrent
+                          hasError
+                            ? 'bg-rose-500'
+                            : isCurrent
                             ? 'bg-indigo-500'
                             : isCompleted
                             ? 'bg-emerald-500'
@@ -333,511 +456,517 @@ export default function NuevoLeadPage() {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="p-6 sm:p-8 space-y-6">
+          <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="p-6 sm:p-8 space-y-6">
             
+            {/* Banner de advertencia de validación */}
+            {validationWarning && (
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-400" />
+                <span className="font-medium">{validationWarning}</span>
+              </div>
+            )}
+
             {/* PESTAÑA 1: DATOS DE LA EMPRESA */}
-            {activeTab === 'empresa' && (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Nombre Comercial <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      {...register('company_name')}
-                      placeholder="Ej. Distribuidora del Pacífico"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                    {errors.company_name && (
-                      <p className="text-xs text-rose-400 mt-1">{errors.company_name.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Razón Social (opcional)
-                    </label>
-                    <input
-                      type="text"
-                      {...register('legal_name')}
-                      placeholder="Ej. DisPacífico S.A."
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      RUC / Identificación Fiscal (opcional)
-                    </label>
-                    <input
-                      type="text"
-                      {...register('tax_id')}
-                      placeholder="Ej. 0991234567001"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Nicho Empresarial <span className="text-rose-500">*</span>
-                    </label>
-                    <select
-                      {...register('niche')}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    >
-                      {BUSINESS_NICHES.map((niche) => (
-                        <option key={niche} value={niche}>{niche}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Ciudad
-                    </label>
-                    <input
-                      type="text"
-                      {...register('city')}
-                      placeholder="Ej. Guayaquil"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Provincia
-                    </label>
-                    <input
-                      type="text"
-                      {...register('province')}
-                      placeholder="Ej. Guayas"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Sitio Web
-                    </label>
-                    <input
-                      type="text"
-                      {...register('website')}
-                      placeholder="https://empresa.com"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Redes Sociales
-                    </label>
-                    <input
-                      type="text"
-                      {...register('social_media')}
-                      placeholder="Instagram, Facebook o LinkedIn"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-4 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('contacto')}
-                    className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
-                  >
-                    Siguiente: Contacto Principal →
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* PESTAÑA 2: CONTACTO PRINCIPAL */}
-            {activeTab === 'contacto' && (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Nombre Completo del Contacto <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      {...register('contact_name')}
-                      placeholder="Ej. Ing. Carlos Mendoza"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                    {errors.contact_name && (
-                      <p className="text-xs text-rose-400 mt-1">{errors.contact_name.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Cargo o Rol
-                    </label>
-                    <input
-                      type="text"
-                      {...register('contact_role')}
-                      placeholder="Ej. Gerente General / Socio / Director"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Teléfono
-                    </label>
-                    <input
-                      type="tel"
-                      {...register('phone')}
-                      onBlur={checkDuplicates}
-                      placeholder="Ej. +593 99 123 4567"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      WhatsApp
-                    </label>
-                    <input
-                      type="tel"
-                      {...register('whatsapp')}
-                      placeholder="Ej. 0991234567"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Correo Electrónico
-                    </label>
-                    <input
-                      type="email"
-                      {...register('email')}
-                      onBlur={checkDuplicates}
-                      placeholder="carlos@empresa.com"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Preferencia de Contacto
-                    </label>
-                    <select
-                      {...register('contact_preference')}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="WhatsApp">WhatsApp (Recomendado)</option>
-                      <option value="Llamada">Llamada telefónica</option>
-                      <option value="Correo">Correo electrónico</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="pt-4 flex justify-between">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('empresa')}
-                    className="px-4 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
-                  >
-                    ← Volver a Empresa
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('necesidad')}
-                    className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
-                  >
-                    Siguiente: Necesidad →
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* PESTAÑA 3: SITUACIÓN Y NECESIDAD */}
-            {activeTab === 'necesidad' && (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Tipo de Software Solicitado <span className="text-rose-500">*</span>
-                    </label>
-                    <select
-                      {...register('software_type')}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="ERP/CRM">ERP / Mini-CRM a Medida</option>
-                      <option value="Web App">Web Application / Portal</option>
-                      <option value="Mobile App">Mobile App (Android/iOS)</option>
-                      <option value="E-commerce">E-commerce / Tienda B2B</option>
-                      <option value="Landing Page">Landing Page de Conversión</option>
-                      <option value="Otro">Otro Sistema Personalizado</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Método de Gestión Actual
-                    </label>
-                    <select
-                      {...register('current_management_method')}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="Excel">Hojas de Excel / Google Sheets</option>
-                      <option value="WhatsApp">WhatsApp y notas de voz</option>
-                      <option value="Cuaderno">Cuaderno / Papel / Manual</option>
-                      <option value="Software antiguo">Software antiguo / Enlatado rígido</option>
-                      <option value="Múltiples herramientas">Múltiples herramientas desintegradas</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Tamaño del Equipo / Usuarios Previstos
-                    </label>
-                    <input
-                      type="text"
-                      {...register('team_size')}
-                      placeholder="Ej. 10 personas (3 administrativos, 7 en campo)"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Presupuesto Referencial (si lo comunicó)
-                    </label>
-                    <input
-                      type="text"
-                      {...register('reference_budget')}
-                      placeholder="Ej. $1,500 - $3,000 USD"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
+            <div className={activeTab === 'empresa' ? 'space-y-4 animate-in fade-in duration-200' : 'hidden'}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">
-                    Necesidad Principal
+                    Nombre Comercial <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
-                    {...register('main_need')}
-                    placeholder="Ej. Centralizar pedidos, inventario multisede y seguimiento de cobros"
+                    {...register('company_name')}
+                    placeholder="Ej. Distribuidora del Pacífico"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                  {errors.company_name && (
+                    <p className="text-xs text-rose-400 mt-1">{errors.company_name.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Razón Social (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    {...register('legal_name')}
+                    placeholder="Ej. DisPacífico S.A."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    RUC / Identificación Fiscal (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    {...register('tax_id')}
+                    placeholder="Ej. 0991234567001"
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">
-                    Descripción Inicial del Problema
+                    Nicho Empresarial <span className="text-rose-500">*</span>
                   </label>
-                  <textarea
-                    rows={3}
-                    {...register('problem_description')}
-                    placeholder="Detalles sobre qué cuellos de botella experimenta el negocio, pérdidas de tiempo o errores recurrentes..."
+                  <select
+                    {...register('niche')}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    {BUSINESS_NICHES.map((niche) => (
+                      <option key={niche} value={niche}>{niche}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Ciudad
+                  </label>
+                  <input
+                    type="text"
+                    {...register('city')}
+                    placeholder="Ej. Guayaquil"
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
-                <div className="pt-4 flex justify-between">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('contacto')}
-                    className="px-4 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
-                  >
-                    ← Volver a Contacto
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('comercial')}
-                    className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
-                  >
-                    Siguiente: Gestión Comercial →
-                  </button>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Provincia
+                  </label>
+                  <input
+                    type="text"
+                    {...register('province')}
+                    placeholder="Ej. Guayas"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
                 </div>
               </div>
-            )}
 
-            {/* PESTAÑA 4: GESTIÓN COMERCIAL Y AGENDAMIENTO */}
-            {activeTab === 'comercial' && (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Canal de Origen <span className="text-rose-500">*</span>
-                    </label>
-                    <select
-                      {...register('lead_source')}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="Meta/Facebook">Meta Ads (Facebook / Instagram via Grow Level)</option>
-                      <option value="Instagram Ads">Instagram Direct</option>
-                      <option value="Google Ads">Google Ads / Web</option>
-                      <option value="Referido">Referido de cliente actual</option>
-                      <option value="Directo">Contacto Directo / Networking</option>
-                      <option value="Alianza">Alianza Estratégica</option>
-                      <option value="Otro">Otro Canal</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Campaña o Referencia
-                    </label>
-                    <input
-                      type="text"
-                      {...register('campaign')}
-                      placeholder="Ej. Campaña ERP Clínicas Sep-Oct"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Sitio Web
+                  </label>
+                  <input
+                    type="text"
+                    {...register('website')}
+                    placeholder="https://empresa.com"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Prioridad Comercial
-                    </label>
-                    <select
-                      {...register('priority')}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="Alta">Alta (Urgente / Decisor directo)</option>
-                      <option value="Media">Media (Interés activo)</option>
-                      <option value="Baja">Baja (Solo cotizando / Exploratorio)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        Asesor Responsable <span className="text-rose-500">*</span>
-                      </span>
-                      <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1">
-                        <Lock className="w-3 h-3" /> Asignación Automática
-                      </span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        {...register('assigned_to')}
-                        readOnly
-                        placeholder={loadingAdvisor ? 'Identificando asesor activo...' : 'Asesor responsable'}
-                        className="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 font-semibold cursor-not-allowed select-none focus:outline-none focus:ring-0 shadow-inner"
-                      />
-                      <div className="absolute right-3.5 top-2.5 flex items-center gap-1.5 text-slate-400">
-                        <Lock className="w-3.5 h-3.5 text-indigo-400" />
-                        <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">
-                          Bloqueado
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      El prospecto queda registrado automáticamente bajo tu usuario.
-                    </p>
-                  </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Redes Sociales
+                  </label>
+                  <input
+                    type="text"
+                    {...register('social_media')}
+                    placeholder="Instagram, Facebook o LinkedIn"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
                 </div>
+              </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Próxima Acción Comercial
-                    </label>
-                    <input
-                      type="text"
-                      {...register('next_action')}
-                      placeholder="Ej. Enviar mensaje de WhatsApp para agendar diagnóstico"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
+              <div className="pt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => goToTab('contacto')}
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+                >
+                  Siguiente: Contacto Principal →
+                </button>
+              </div>
+            </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Fecha del Próximo Seguimiento
-                    </label>
-                    <input
-                      type="datetime-local"
-                      {...register('next_followup_date')}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Agendamiento directo de Diagnóstico */}
-                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="appointment_scheduled"
-                      {...register('appointment_scheduled')}
-                      className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900"
-                    />
-                    <label htmlFor="appointment_scheduled" className="text-xs font-semibold text-white cursor-pointer select-none">
-                      ¿Ya se acordó fecha para el Diagnóstico Gratuito de 30 min con Robinson?
-                    </label>
-                  </div>
-
-                  {appointmentScheduled && (
-                    <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1">
-                        Fecha y Hora del Diagnóstico <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="datetime-local"
-                        {...register('appointment_date')}
-                        className="w-full sm:w-80 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                      />
-                      {errors.appointment_date && (
-                        <p className="text-xs text-rose-400 mt-1">{errors.appointment_date.message}</p>
-                      )}
-                    </div>
+            {/* PESTAÑA 2: CONTACTO PRINCIPAL */}
+            <div className={activeTab === 'contacto' ? 'space-y-4 animate-in fade-in duration-200' : 'hidden'}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Nombre Completo del Contacto <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    {...register('contact_name')}
+                    placeholder="Ej. Ing. Carlos Mendoza"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                  {errors.contact_name && (
+                    <p className="text-xs text-rose-400 mt-1">{errors.contact_name.message}</p>
                   )}
                 </div>
 
-                <div className="pt-4 flex justify-between items-center">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('necesidad')}
-                    className="px-4 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
-                  >
-                    ← Volver a Situación
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-xs text-white bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-lg shadow-indigo-500/20 disabled:opacity-50 transition-all"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Guardando Prospecto...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        Guardar Prospecto en CRM
-                      </>
-                    )}
-                  </button>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Cargo o Rol
+                  </label>
+                  <input
+                    type="text"
+                    {...register('contact_role')}
+                    placeholder="Ej. Gerente General / Socio / Director"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
                 </div>
               </div>
-            )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Teléfono
+                  </label>
+                  <input
+                    type="tel"
+                    {...register('phone')}
+                    onBlur={checkDuplicates}
+                    placeholder="Ej. +593 99 123 4567"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                  {errors.phone && (
+                    <p className="text-xs text-rose-400 mt-1">{errors.phone.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    WhatsApp
+                  </label>
+                  <input
+                    type="tel"
+                    {...register('whatsapp')}
+                    placeholder="Ej. 0991234567"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Correo Electrónico
+                  </label>
+                  <input
+                    type="email"
+                    {...register('email')}
+                    onBlur={checkDuplicates}
+                    placeholder="carlos@empresa.com"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                  {errors.email && (
+                    <p className="text-xs text-rose-400 mt-1">{errors.email.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Preferencia de Contacto
+                  </label>
+                  <select
+                    {...register('contact_preference')}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="WhatsApp">WhatsApp (Recomendado)</option>
+                    <option value="Llamada">Llamada telefónica</option>
+                    <option value="Correo">Correo electrónico</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-between">
+                <button
+                  type="button"
+                  onClick={() => goToTab('empresa')}
+                  className="px-4 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                >
+                  ← Volver a Empresa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToTab('necesidad')}
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+                >
+                  Siguiente: Necesidad →
+                </button>
+              </div>
+            </div>
+
+            {/* PESTAÑA 3: SITUACIÓN Y NECESIDAD */}
+            <div className={activeTab === 'necesidad' ? 'space-y-4 animate-in fade-in duration-200' : 'hidden'}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Tipo de Software Solicitado <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    {...register('software_type')}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="ERP/CRM">ERP / Mini-CRM a Medida</option>
+                    <option value="Web App">Web Application / Portal</option>
+                    <option value="Mobile App">Mobile App (Android/iOS)</option>
+                    <option value="E-commerce">E-commerce / Tienda B2B</option>
+                    <option value="Landing Page">Landing Page de Conversión</option>
+                    <option value="Otro">Otro Sistema Personalizado</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Método de Gestión Actual
+                  </label>
+                  <select
+                    {...register('current_management_method')}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="Excel">Hojas de Excel / Google Sheets</option>
+                    <option value="WhatsApp">WhatsApp y notas de voz</option>
+                    <option value="Cuaderno">Cuaderno / Papel / Manual</option>
+                    <option value="Software antiguo">Software antiguo / Enlatado rígido</option>
+                    <option value="Múltiples herramientas">Múltiples herramientas desintegradas</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Tamaño del Equipo / Usuarios Previstos
+                  </label>
+                  <input
+                    type="text"
+                    {...register('team_size')}
+                    placeholder="Ej. 10 personas (3 administrativos, 7 en campo)"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Presupuesto Referencial (si lo comunicó)
+                  </label>
+                  <input
+                    type="text"
+                    {...register('reference_budget')}
+                    placeholder="Ej. $1,500 - $3,000 USD"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Necesidad Principal
+                </label>
+                <input
+                  type="text"
+                  {...register('main_need')}
+                  placeholder="Ej. Centralizar pedidos, inventario multisede y seguimiento de cobros"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Descripción Inicial del Problema
+                </label>
+                <textarea
+                  rows={3}
+                  {...register('problem_description')}
+                  placeholder="Detalles sobre qué cuellos de botella experimenta el negocio, pérdidas de tiempo o errores recurrentes..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="pt-4 flex justify-between">
+                <button
+                  type="button"
+                  onClick={() => goToTab('contacto')}
+                  className="px-4 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                >
+                  ← Volver a Contacto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToTab('comercial')}
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+                >
+                  Siguiente: Gestión Comercial →
+                </button>
+              </div>
+            </div>
+
+            {/* PESTAÑA 4: GESTIÓN COMERCIAL Y AGENDAMIENTO */}
+            <div className={activeTab === 'comercial' ? 'space-y-4 animate-in fade-in duration-200' : 'hidden'}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Canal de Origen <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    {...register('lead_source')}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="Meta/Facebook">Meta Ads (Facebook / Instagram via Grow Level)</option>
+                    <option value="Instagram Ads">Instagram Direct</option>
+                    <option value="Google Ads">Google Ads / Web</option>
+                    <option value="Referido">Referido de cliente actual</option>
+                    <option value="Directo">Contacto Directo / Networking</option>
+                    <option value="Alianza">Alianza Estratégica</option>
+                    <option value="Otro">Otro Canal</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Campaña o Referencia
+                  </label>
+                  <input
+                    type="text"
+                    {...register('campaign')}
+                    placeholder="Ej. Campaña ERP Clínicas Sep-Oct"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Prioridad Comercial
+                  </label>
+                  <select
+                    {...register('priority')}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="Alta">Alta (Urgente / Decisor directo)</option>
+                    <option value="Media">Media (Interés activo)</option>
+                    <option value="Baja">Baja (Solo cotizando / Exploratorio)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      Asesor Responsable <span className="text-rose-500">*</span>
+                    </span>
+                    <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1">
+                      <Lock className="w-3 h-3" /> Asignación Automática
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      {...register('assigned_to')}
+                      readOnly
+                      placeholder={loadingAdvisor ? 'Identificando asesor activo...' : 'Asesor responsable'}
+                      className="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 font-semibold cursor-not-allowed select-none focus:outline-none focus:ring-0 shadow-inner"
+                    />
+                    <div className="absolute right-3.5 top-2.5 flex items-center gap-1.5 text-slate-400">
+                      <Lock className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">
+                        Bloqueado
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    El prospecto queda registrado automáticamente bajo tu usuario.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Próxima Acción Comercial
+                  </label>
+                  <input
+                    type="text"
+                    {...register('next_action')}
+                    placeholder="Ej. Enviar mensaje de WhatsApp para agendar diagnóstico"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Fecha del Próximo Seguimiento
+                  </label>
+                  <input
+                    type="datetime-local"
+                    {...register('next_followup_date')}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Agendamiento directo de Diagnóstico */}
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="appointment_scheduled"
+                    {...register('appointment_scheduled')}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                  />
+                  <label htmlFor="appointment_scheduled" className="text-xs font-semibold text-white cursor-pointer select-none">
+                    ¿Ya se acordó fecha para el Diagnóstico Gratuito de 30 min con Robinson?
+                  </label>
+                </div>
+
+                {appointmentScheduled && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">
+                      Fecha y Hora del Diagnóstico <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      {...register('appointment_date')}
+                      className="w-full sm:w-80 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    />
+                    {errors.appointment_date && (
+                      <p className="text-xs text-rose-400 mt-1">{errors.appointment_date.message}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={() => goToTab('necesidad')}
+                  className="px-4 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                >
+                  ← Volver a Situación
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-xs text-white bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-lg shadow-indigo-500/20 disabled:opacity-50 transition-all cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Guardando Prospecto...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Guardar Prospecto en CRM
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
 
             {/* Mensajes de servidor */}
             {serverError && (

@@ -156,19 +156,23 @@ export async function createEnrichedLeadAction(payload: Partial<Lead>) {
 
   // Registrar actividad inicial automática
   if (data?.id) {
-    await supabase.from('activities').insert([
-      {
-        lead_id: data.id,
-        activity_type: 'Nota interna',
-        user_id: userData?.user?.id || null,
-        summary: `Prospecto registrado en el CRM con origen: ${insertData.lead_source}`,
-        result: 'Pendiente de primera atención',
-        next_step: insertData.next_action,
-        next_followup_date: insertData.next_followup_date,
-        visibility: 'Interno',
-        status: 'Realizada',
-      },
-    ]);
+    try {
+      await supabase.from('activities').insert([
+        {
+          lead_id: data.id,
+          activity_type: 'Nota interna',
+          user_id: userData?.user?.id || null,
+          summary: `Prospecto registrado en el CRM con origen: ${insertData.lead_source}`,
+          result: 'Pendiente de primera atención',
+          next_step: insertData.next_action,
+          next_followup_date: insertData.next_followup_date,
+          visibility: 'Interno',
+          status: 'Realizada',
+        },
+      ]);
+    } catch (actErr) {
+      console.warn('No se pudo registrar actividad inicial automática:', actErr);
+    }
   }
 
   revalidatePath('/');
