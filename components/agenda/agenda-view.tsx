@@ -17,7 +17,10 @@ import {
   Loader2,
   Phone,
   Building2,
-  FileCheck
+  FileCheck,
+  Search,
+  Users,
+  Sparkles
 } from 'lucide-react';
 import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -31,12 +34,23 @@ import {
   saveWeeklySchedulesAction
 } from '@/app/actions/agenda';
 
+export interface LeadSummary {
+  id: string;
+  company_name: string;
+  contact_name: string;
+  phone?: string | null;
+  email?: string | null;
+  status: string;
+  software_type?: string;
+}
+
 interface AgendaViewProps {
   initialRole: UserRole;
   userEmail: string;
+  initialLeadId?: string;
 }
 
-export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
+export function AgendaView({ initialRole, userEmail, initialLeadId }: AgendaViewProps) {
   const isAdmin = initialRole === 'admin';
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(
     startOfWeek(new Date(), { weekStartsOn: 1 })
@@ -47,7 +61,8 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
     blocks: AvailabilityBlock[];
     meetings: Meeting[];
     weeklySchedules: WeeklySchedule[];
-  }>({ robinson: null, blocks: [], meetings: [], weeklySchedules: [] });
+    leads?: LeadSummary[];
+  }>({ robinson: null, blocks: [], meetings: [], weeklySchedules: [], leads: [] });
 
   // Modales
   const [showBlockModal, setShowBlockModal] = useState(false);
@@ -56,6 +71,11 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
   const [showOutcomeModal, setShowOutcomeModal] = useState<Meeting | null>(null);
   const [selectedSlotTime, setSelectedSlotTime] = useState<string>('');
 
+  // Modo de asociación de reunión: con lead existente, sin lead (general), o prospecto manual
+  const [meetingTargetMode, setMeetingTargetMode] = useState<'lead' | 'none' | 'manual'>('lead');
+  const [selectedLeadId, setSelectedLeadId] = useState<string>(initialLeadId || '');
+  const [leadSearchTerm, setLeadSearchTerm] = useState<string>('');
+
   // Estados de formulario
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -63,6 +83,7 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
   // Formulario de Reserva
   const [bookingForm, setBookingForm] = useState({
     title: 'Diagnóstico Gratuito 30 min',
+    generalTitle: '',
     meeting_type: 'Diagnóstico',
     startTime: '',
     endTime: '',
@@ -78,6 +99,25 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
     const pad = (n: number) => n.toString().padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   };
+
+  // Pre-seleccionar lead si se pasó initialLeadId por query params o props
+  useEffect(() => {
+    if (initialLeadId && scheduleData.leads && scheduleData.leads.length > 0) {
+      const foundLead = scheduleData.leads.find(l => l.id === initialLeadId);
+      if (foundLead) {
+        setSelectedLeadId(foundLead.id);
+        setMeetingTargetMode('lead');
+        setBookingForm(prev => ({
+          ...prev,
+          companyName: foundLead.company_name,
+          leadName: foundLead.contact_name,
+          startTime: prev.startTime || getLocalDatetimeString(new Date()),
+          endTime: prev.endTime || getLocalDatetimeString(new Date(Date.now() + 30 * 60 * 1000)),
+        }));
+        setShowBookingModal(true);
+      }
+    }
+  }, [initialLeadId, scheduleData.leads]);
 
   // Formulario de Disponibilidad (Admin)
   const [availForm, setAvailForm] = useState({
@@ -121,6 +161,50 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
   const handlePrevWeek = () => setCurrentWeekStart(prev => addDays(prev, -7));
   const handleNextWeek = () => setCurrentWeekStart(prev => addDays(prev, 7));
   const handleCurrentWeek = () => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
+
+  // Manejar selección de lead existente
+  const handleSelectLead = (leadId: string) => {
+    setSelectedLeadId(leadId);
+    if (!leadId) {
+      setBookingForm(prev => ({
+        ...prev,
+        companyName: '',
+        leadName: '',
+      }));
+      return;
+    }
+    const lead = scheduleData.leads?.find(l => l.id === leadId);
+    if (lead) {
+      setBookingForm(prev => ({
+        ...prev,
+        companyName: lead.company_name,
+        leadName: lead.contact_name,
+        objective: prev.objective || `Diagnóstico comercial y necesidades de ${lead.company_name}`,
+      }));
+    }
+  };
+
+  // Manejar cambio de modo (con lead, sin lead, manual)
+  const handleSwitchMode = (mode: 'lead' | 'none' | 'manual') => {
+    setMeetingTargetMode(mode);
+    if (mode === 'none') {
+      if (!bookingForm.generalTitle) {
+        setBookingForm(prev => ({
+          ...prev,
+          generalTitle: prev.meeting_type === 'Diagnóstico' ? 'Reunión General / Interna' : prev.meeting_type,
+        }));
+      }
+    } else if (mode === 'lead' && selectedLeadId) {
+      const lead = scheduleData.leads?.find(l => l.id === selectedLeadId);
+      if (lead) {
+        setBookingForm(prev => ({
+          ...prev,
+          companyName: lead.company_name,
+          leadName: lead.contact_name,
+        }));
+      }
+    }
+  };
 
   // Guardar Bloqueo/Disponibilidad (Admin)
   const handleSaveAvailability = async (e: React.FormEvent) => {
@@ -191,7 +275,7 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
     }
   };
 
-  // Reservar Cita (Asesor o Admin)
+  // Reservar Cita (Con lead seleccionado, sin lead general, o manual)
   const handleBookMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -203,10 +287,49 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
       return;
     }
 
+    if (!bookingForm.startTime || !bookingForm.endTime) {
+      setFeedback({ type: 'error', text: 'Por favor define la fecha y hora de inicio y fin.' });
+      setSubmitting(false);
+      return;
+    }
+
+    let finalTitle = '';
+    let finalLeadId: string | null = null;
+
+    if (meetingTargetMode === 'lead') {
+      if (!selectedLeadId) {
+        setFeedback({ type: 'error', text: 'Por favor selecciona un prospecto de la lista o cambia la opción a "Sin Lead / General".' });
+        setSubmitting(false);
+        return;
+      }
+      finalLeadId = selectedLeadId;
+      const selectedLead = scheduleData.leads?.find(l => l.id === selectedLeadId);
+      const companyOrContact = selectedLead?.company_name || selectedLead?.contact_name || bookingForm.companyName || bookingForm.leadName;
+      finalTitle = `${bookingForm.meeting_type} - ${companyOrContact}`;
+    } else if (meetingTargetMode === 'manual') {
+      if (!bookingForm.companyName.trim() && !bookingForm.leadName.trim()) {
+        setFeedback({ type: 'error', text: 'Por favor ingresa el nombre de la empresa o contacto del prospecto.' });
+        setSubmitting(false);
+        return;
+      }
+      finalTitle = `${bookingForm.meeting_type} - ${bookingForm.companyName.trim() || bookingForm.leadName.trim()}`;
+      finalLeadId = null;
+    } else {
+      // Sin lead en específico (reunión general o interna)
+      if (!bookingForm.generalTitle.trim()) {
+        setFeedback({ type: 'error', text: 'Por favor ingresa el título o asunto de la reunión.' });
+        setSubmitting(false);
+        return;
+      }
+      finalTitle = bookingForm.generalTitle.trim();
+      finalLeadId = null;
+    }
+
     const res = await bookMeetingSlotAction({
-      title: `${bookingForm.title} - ${bookingForm.companyName || bookingForm.leadName}`,
+      title: finalTitle,
       meeting_type: bookingForm.meeting_type,
       host_id: scheduleData.robinson.id,
+      lead_id: finalLeadId,
       start_time: new Date(bookingForm.startTime).toISOString(),
       end_time: new Date(bookingForm.endTime).toISOString(),
       modality: bookingForm.modality,
@@ -219,8 +342,16 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
     if (!res.success) {
       setFeedback({ type: 'error', text: res.error || 'No se pudo reservar la cita.' });
     } else {
-      setFeedback({ type: 'success', text: '✅ Cita reservada y confirmada con éxito. Horario bloqueado.' });
+      setFeedback({ type: 'success', text: '✅ Cita reservada y confirmada con éxito. Horario bloqueado en la agenda.' });
       setShowBookingModal(false);
+      setSelectedLeadId('');
+      setLeadSearchTerm('');
+      setBookingForm(prev => ({
+        ...prev,
+        generalTitle: '',
+        companyName: '',
+        leadName: '',
+      }));
       loadSchedule();
     }
   };
@@ -250,6 +381,17 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
       startTime: getLocalDatetimeString(start),
       endTime: getLocalDatetimeString(end),
     }));
+
+    if (selectedLeadId && scheduleData.leads) {
+      const lead = scheduleData.leads.find(l => l.id === selectedLeadId);
+      if (lead) {
+        setBookingForm(prev => ({
+          ...prev,
+          companyName: lead.company_name,
+          leadName: lead.contact_name,
+        }));
+      }
+    }
     setShowBookingModal(true);
   };
 
@@ -458,6 +600,20 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
                       <div className="font-semibold text-slate-200 mt-1 truncate">
                         {meeting.title}
                       </div>
+
+                      {/* Indicador de prospecto o reunión general */}
+                      {meeting.leads ? (
+                        <div className="text-[10px] text-emerald-400/90 mt-1 flex items-center gap-1 truncate font-medium">
+                          <Building2 className="w-3 h-3 shrink-0 text-emerald-400" />
+                          <span className="truncate">{meeting.leads.company_name}</span>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 shrink-0 text-slate-500" />
+                          <span className="truncate">Sin Lead / General</span>
+                        </div>
+                      )}
+
                       <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
                         <User className="w-3 h-3 text-slate-500" />
                         Asesor: {meeting.advisor_profile?.full_name || 'Asesor'}
@@ -740,42 +896,213 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
                     </div>
                   </div>
 
-                  {/* Bloque 2: Información del Cliente */}
+                  {/* Bloque 2: Selección de Prospecto o Reunión General */}
                   <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 space-y-4 shadow-sm">
-                    <h3 className="text-[11px] uppercase tracking-wider font-bold text-emerald-400 flex items-center gap-1.5 border-b border-slate-800/80 pb-2">
-                      <User className="w-3.5 h-3.5" /> 2. Datos del Prospecto
-                    </h3>
-                    
-                    <div className="space-y-3 text-sm">
-                      <div>
-                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Empresa / Negocio</label>
-                        <div className="relative">
-                          <Building2 className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                          <input
-                            type="text"
-                            placeholder="Ej. Clínica Dental"
-                            value={bookingForm.companyName}
-                            onChange={e => setBookingForm({ ...bookingForm, companyName: e.target.value })}
-                            className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl pl-9 pr-3 py-2.5 text-white transition-colors"
-                            required
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Contacto Principal</label>
-                        <div className="relative">
-                          <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                          <input
-                            type="text"
-                            placeholder="Nombre del cliente"
-                            value={bookingForm.leadName}
-                            onChange={e => setBookingForm({ ...bookingForm, leadName: e.target.value })}
-                            className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl pl-9 pr-3 py-2.5 text-white transition-colors"
-                            required
-                          />
-                        </div>
-                      </div>
+                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                      <h3 className="text-[11px] uppercase tracking-wider font-bold text-emerald-400 flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5" /> 2. Destinatario de la Cita
+                      </h3>
+                      <span className="text-[10px] font-medium text-slate-500">
+                        {meetingTargetMode === 'lead' ? 'Con Lead CRM' : meetingTargetMode === 'none' ? 'Sin Lead (General)' : 'Lead Manual'}
+                      </span>
                     </div>
+
+                    {/* Selector de Modo (Pills) */}
+                    <div className="grid grid-cols-3 gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchMode('lead')}
+                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                          meetingTargetMode === 'lead'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                        }`}
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span className="truncate">Vincular Lead</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchMode('none')}
+                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                          meetingTargetMode === 'none'
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                        }`}
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span className="truncate">Sin Lead</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchMode('manual')}
+                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                          meetingTargetMode === 'manual'
+                            ? 'bg-slate-700 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                        }`}
+                      >
+                        <Building2 className="w-3.5 h-3.5" />
+                        <span className="truncate">Manual</span>
+                      </button>
+                    </div>
+
+                    {/* MODO 1: SELECCIONAR LEAD DE LA BASE DE DATOS */}
+                    {meetingTargetMode === 'lead' && (
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <label className="block text-[11px] text-slate-400 font-semibold mb-1 flex items-center justify-between">
+                            <span>Seleccionar Prospecto Creado</span>
+                            <span className="text-[10px] text-emerald-400 font-normal">
+                              {(scheduleData.leads || []).length} disponibles
+                            </span>
+                          </label>
+
+                          {/* Buscador de prospectos */}
+                          <div className="relative mb-2">
+                            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                            <input
+                              type="text"
+                              placeholder="Filtrar por empresa o contacto..."
+                              value={leadSearchTerm}
+                              onChange={e => setLeadSearchTerm(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-700/80 focus:border-emerald-500 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 transition-colors"
+                            />
+                            {leadSearchTerm && (
+                              <button
+                                type="button"
+                                onClick={() => setLeadSearchTerm('')}
+                                className="absolute right-2.5 top-2 text-slate-400 hover:text-white text-xs"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Select de Leads */}
+                          <select
+                            value={selectedLeadId}
+                            onChange={e => handleSelectLead(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white font-medium transition-colors"
+                            required
+                          >
+                            <option value="">-- Selecciona un prospecto registrado --</option>
+                            {(scheduleData.leads || [])
+                              .filter(lead => {
+                                if (!leadSearchTerm.trim()) return true;
+                                const term = leadSearchTerm.toLowerCase();
+                                return (
+                                  lead.company_name?.toLowerCase().includes(term) ||
+                                  lead.contact_name?.toLowerCase().includes(term) ||
+                                  lead.phone?.toLowerCase().includes(term) ||
+                                  lead.software_type?.toLowerCase().includes(term)
+                                );
+                              })
+                              .map(lead => (
+                                <option key={lead.id} value={lead.id}>
+                                  {lead.company_name} — {lead.contact_name} ({lead.status})
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+
+                        {/* Tarjeta de Resumen del Lead Seleccionado */}
+                        {selectedLeadId && (() => {
+                          const lead = scheduleData.leads?.find(l => l.id === selectedLeadId);
+                          if (!lead) return null;
+                          return (
+                            <div className="p-3 bg-emerald-950/20 border border-emerald-500/30 rounded-xl space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                                  <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+                                  {lead.company_name}
+                                </span>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+                                  {lead.status}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-300 flex items-center gap-1">
+                                <User className="w-3 h-3 text-slate-400" />
+                                <span>{lead.contact_name}</span>
+                              </div>
+                              {lead.phone && (
+                                <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                                  <Phone className="w-3 h-3 text-emerald-400" />
+                                  <span>{lead.phone}</span>
+                                </div>
+                              )}
+                              <p className="text-[10px] text-emerald-400/80 pt-1 border-t border-emerald-500/20">
+                                ✓ Se agendará la cita a este lead y se actualizará su seguimiento en el CRM y Kanban.
+                              </p>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {/* MODO 2: SIN LEAD ESPECÍFICO (REUNIÓN GENERAL / INTERNA) */}
+                    {meetingTargetMode === 'none' && (
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <label className="block text-[11px] text-slate-400 font-semibold mb-1">
+                            Título o Asunto de la Reunión
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ej. Reunión General, Alianza Comercial, Revisión Técnica..."
+                            value={bookingForm.generalTitle}
+                            onChange={e => setBookingForm({ ...bookingForm, generalTitle: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-3 py-2.5 text-white transition-colors text-sm"
+                            required
+                          />
+                        </div>
+
+                        <div className="p-3 bg-indigo-950/30 border border-indigo-500/20 rounded-xl text-xs text-indigo-300 flex items-start gap-2">
+                          <Sparkles className="w-4 h-4 shrink-0 text-indigo-400 mt-0.5" />
+                          <div>
+                            <p className="font-semibold text-white">Reunión sin lead asociado</p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              Este evento se registrará en la agenda de Robinson bloqueando el horario, sin requerir vincularse a un cliente o prospecto de ventas.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* MODO 3: PROSPECTO MANUAL (NO REGISTRADO PREVIAMENTE) */}
+                    {meetingTargetMode === 'manual' && (
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <label className="block text-[11px] text-slate-400 font-semibold mb-1">Empresa / Negocio</label>
+                          <div className="relative">
+                            <Building2 className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                            <input
+                              type="text"
+                              placeholder="Ej. Clínica Dental o Negocio"
+                              value={bookingForm.companyName}
+                              onChange={e => setBookingForm({ ...bookingForm, companyName: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 focus:border-slate-500 rounded-xl pl-9 pr-3 py-2.5 text-white transition-colors"
+                              required
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] text-slate-400 font-semibold mb-1">Contacto Principal</label>
+                          <div className="relative">
+                            <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                            <input
+                              type="text"
+                              placeholder="Nombre de la persona"
+                              value={bookingForm.leadName}
+                              onChange={e => setBookingForm({ ...bookingForm, leadName: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 focus:border-slate-500 rounded-xl pl-9 pr-3 py-2.5 text-white transition-colors"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Bloque 3: Modalidad y Detalles */}
@@ -789,14 +1116,23 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
                         <label className="block text-[11px] text-slate-400 font-semibold mb-1">Tipo de Reunión</label>
                         <select
                           value={bookingForm.meeting_type}
-                          onChange={e => setBookingForm({ ...bookingForm, meeting_type: e.target.value })}
+                          onChange={e => {
+                            const newType = e.target.value;
+                            setBookingForm(prev => ({
+                              ...prev,
+                              meeting_type: newType,
+                              generalTitle: meetingTargetMode === 'none' && (!prev.generalTitle || prev.generalTitle === prev.meeting_type) ? newType : prev.generalTitle
+                            }));
+                          }}
                           className="w-full bg-slate-900 border border-slate-700 focus:border-sky-500 rounded-xl px-3 py-2.5 text-white transition-colors"
                         >
                           <option value="Diagnóstico">Diagnóstico Gratuito (30 min)</option>
                           <option value="Presentación de Demo">Presentación de Demo Funcional</option>
                           <option value="Revisión de Propuesta">Revisión de Propuesta y Alcance</option>
                           <option value="Seguimiento">Seguimiento Comercial / Proyecto</option>
+                          <option value="Reunión Interna">Reunión Interna / Planificación</option>
                           <option value="Soporte">Soporte Técnico Especializado</option>
+                          <option value="Otro">Otro / General</option>
                         </select>
                       </div>
 
@@ -881,9 +1217,37 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
             </div>
 
             <div className="space-y-3 text-xs text-slate-300">
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
                 <div><span className="text-slate-500">Tipo:</span> <span className="text-white font-medium">{showOutcomeModal.meeting_type}</span></div>
                 <div><span className="text-slate-500">Modalidad:</span> <span className="text-white font-medium">{showOutcomeModal.modality}</span></div>
+                
+                {/* Información de Prospecto o Reunión General */}
+                {showOutcomeModal.leads ? (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-500/20 text-emerald-300">
+                    <div className="font-semibold flex items-center gap-1.5 text-xs">
+                      <Building2 className="w-3.5 h-3.5" />
+                      Lead: {showOutcomeModal.leads.company_name}
+                    </div>
+                    <div className="text-[11px] text-slate-300 mt-1 flex flex-wrap items-center gap-3">
+                      <span className="flex items-center gap-1">
+                        <User className="w-3 h-3 text-slate-400" />
+                        {showOutcomeModal.leads.contact_name}
+                      </span>
+                      {showOutcomeModal.leads.phone && (
+                        <span className="flex items-center gap-1 text-slate-400">
+                          <Phone className="w-3 h-3 text-emerald-400" />
+                          {showOutcomeModal.leads.phone}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 text-[11px] flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Reunión General (Sin prospecto específico vinculado)</span>
+                  </div>
+                )}
+
                 {showOutcomeModal.meeting_url && (
                   <div>
                     <span className="text-slate-500">Enlace:</span>{' '}

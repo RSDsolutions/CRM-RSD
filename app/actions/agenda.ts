@@ -49,11 +49,19 @@ export async function getAgendaScheduleAction(startDate: string, endDate: string
     .order('day_of_week', { ascending: true })
     .order('start_time', { ascending: true });
 
+  // 5. Obtener prospectos disponibles para vincular a reuniones
+  const { data: leads } = await supabase
+    .from('leads')
+    .select('id, company_name, contact_name, phone, email, status, software_type')
+    .eq('is_archived', false)
+    .order('company_name', { ascending: true });
+
   return {
     robinson: adminProfiles?.[0] || null,
     blocks: (blocks as AvailabilityBlock[]) || [],
     meetings: (meetings as Meeting[]) || [],
     weeklySchedules: (weeklySchedules as WeeklySchedule[]) || [],
+    leads: leads || [],
   };
 }
 
@@ -250,24 +258,42 @@ export async function bookMeetingSlotAction(payload: {
       return { success: false, error: error.message };
     }
 
-    // Registrar actividad automática de la cita agendada
+    // Registrar actividad automática de la cita agendada y actualizar lead si existe
     if (payload.lead_id) {
-      await supabase.from('activities').insert([
-        {
-          lead_id: payload.lead_id,
-          activity_type: 'Reunión',
-          user_id: userData.user.id,
-          summary: `Reunión agendada con Robinson: ${payload.title} (${payload.meeting_type})`,
-          activity_date: payload.start_time,
-          next_step: 'Preparar reunión y validar asistencia del cliente',
-          visibility: 'Interno',
-          status: 'Planificada',
-        },
-      ]);
+      try {
+        await supabase.from('activities').insert([
+          {
+            lead_id: payload.lead_id,
+            activity_type: 'Reunión',
+            user_id: userData.user.id,
+            summary: `Reunión agendada con Robinson: ${payload.title} (${payload.meeting_type})`,
+            activity_date: payload.start_time,
+            next_step: 'Preparar reunión y validar asistencia del cliente',
+            visibility: 'Interno',
+            status: 'Planificada',
+          },
+        ]);
+      } catch (actErr) {
+        console.warn('Advertencia al registrar actividad de reunión:', actErr);
+      }
+
+      try {
+        const updateLead: Record<string, any> = {
+          appointment_scheduled: true,
+          appointment_date: payload.start_time,
+        };
+        if (payload.meeting_type === 'Diagnóstico') {
+          updateLead.status = 'Diagnóstico';
+        }
+        await supabase.from('leads').update(updateLead).eq('id', payload.lead_id);
+      } catch (leadErr) {
+        console.warn('Advertencia al actualizar cita en lead:', leadErr);
+      }
     }
 
     revalidatePath('/');
     revalidatePath('/agenda');
+    revalidatePath('/leads');
     return { success: true, meetingId };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error inesperado al reservar cita.';
@@ -308,21 +334,26 @@ export async function updateMeetingStatusAction(
 
   // Si se marcó como Realizada o Cancelada y tiene lead asociado, registrar actividad
   if (data?.lead_id && (payload.status === 'Realizada' || payload.status === 'Cancelada')) {
-    await supabase.from('activities').insert([
-      {
-        lead_id: data.lead_id,
-        activity_type: data.meeting_type === 'Diagnóstico' ? 'Diagnóstico' : 'Reunión',
-        summary: `Reunión ${payload.status.toLowerCase()}: ${data.title}`,
-        result: payload.result || `Estado: ${payload.status}`,
-        next_step: payload.next_steps || null,
-        visibility: 'Interno',
-        status: payload.status === 'Realizada' ? 'Realizada' : 'Cancelada',
-      },
-    ]);
+    try {
+      await supabase.from('activities').insert([
+        {
+          lead_id: data.lead_id,
+          activity_type: data.meeting_type === 'Diagnóstico' ? 'Diagnóstico' : 'Reunión',
+          summary: `Reunión ${payload.status.toLowerCase()}: ${data.title}`,
+          result: payload.result || `Estado: ${payload.status}`,
+          next_step: payload.next_steps || null,
+          visibility: 'Interno',
+          status: payload.status === 'Realizada' ? 'Realizada' : 'Cancelada',
+        },
+      ]);
+    } catch (actErr) {
+      console.warn('Advertencia al registrar actividad de estado:', actErr);
+    }
   }
 
   revalidatePath('/agenda');
   revalidatePath('/');
+  revalidatePath('/leads');
   return { success: true, meeting: data };
 }
 

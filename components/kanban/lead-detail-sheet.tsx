@@ -488,7 +488,7 @@ ${dna.identified_pain_points || lead?.problem_description || lead?.main_need || 
             {/* Quick Actions Row */}
             <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-800/80 overflow-x-auto no-scrollbar">
               <Link
-                href="/agenda"
+                href={`/agenda?lead_id=${lead.id}`}
                 onClick={onClose}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold whitespace-nowrap transition-colors"
               >
