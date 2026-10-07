@@ -74,6 +74,11 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
     notes: '',
   });
 
+  const getLocalDatetimeString = (date: Date) => {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
   // Formulario de Disponibilidad (Admin)
   const [availForm, setAvailForm] = useState({
     title: 'Disponibilidad Diagnósticos',
@@ -202,8 +207,8 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
       title: `${bookingForm.title} - ${bookingForm.companyName || bookingForm.leadName}`,
       meeting_type: bookingForm.meeting_type,
       host_id: scheduleData.robinson.id,
-      start_time: bookingForm.startTime,
-      end_time: bookingForm.endTime,
+      start_time: new Date(bookingForm.startTime).toISOString(),
+      end_time: new Date(bookingForm.endTime).toISOString(),
       modality: bookingForm.modality,
       meeting_url: bookingForm.meetingUrl,
       objective: bookingForm.objective,
@@ -242,8 +247,8 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
 
     setBookingForm(prev => ({
       ...prev,
-      startTime: start.toISOString(),
-      endTime: end.toISOString(),
+      startTime: getLocalDatetimeString(start),
+      endTime: getLocalDatetimeString(end),
     }));
     setShowBookingModal(true);
   };
@@ -289,8 +294,8 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
               const end = new Date(now.getTime() + 30 * 60 * 1000);
               setBookingForm(prev => ({
                 ...prev,
-                startTime: now.toISOString(),
-                endTime: end.toISOString(),
+                startTime: getLocalDatetimeString(now),
+                endTime: getLocalDatetimeString(end),
               }));
               setShowBookingModal(true);
             }}
@@ -716,8 +721,8 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
                         <label className="block text-[11px] text-slate-400 font-semibold mb-1">Hora Inicio</label>
                         <input
                           type="datetime-local"
-                          value={bookingForm.startTime.slice(0, 16)}
-                          onChange={e => setBookingForm({ ...bookingForm, startTime: new Date(e.target.value).toISOString() })}
+                          value={bookingForm.startTime}
+                          onChange={e => setBookingForm({ ...bookingForm, startTime: e.target.value })}
                           className="w-full bg-slate-900 border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-3 py-2.5 text-sm text-white font-medium transition-colors"
                           required
                         />
@@ -726,8 +731,8 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
                         <label className="block text-[11px] text-slate-400 font-semibold mb-1">Hora Fin</label>
                         <input
                           type="datetime-local"
-                          value={bookingForm.endTime.slice(0, 16)}
-                          onChange={e => setBookingForm({ ...bookingForm, endTime: new Date(e.target.value).toISOString() })}
+                          value={bookingForm.endTime}
+                          onChange={e => setBookingForm({ ...bookingForm, endTime: e.target.value })}
                           className="w-full bg-slate-900 border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-3 py-2.5 text-sm text-white font-medium transition-colors"
                           required
                         />
