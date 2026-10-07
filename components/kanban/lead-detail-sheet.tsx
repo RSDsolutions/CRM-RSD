@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Lead, Activity, Task } from '@/types/database.types';
+import { Lead, Activity, Task, LeadStatus } from '@/types/database.types';
 import { createClient } from '@/utils/supabase/client';
 import { convertLeadToClientAction } from '@/app/actions/clients';
 import { getLeadActivitiesAction, createActivityAction } from '@/app/actions/activities';
@@ -48,6 +48,7 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
   const [logText, setLogText] = useState(lead?.interaction_log || '');
   const [isSaving, setIsSaving] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
+  const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Actividades
@@ -127,6 +128,31 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
       setStatusMessage({ type: 'error', text: err.message || 'Error al guardar la bitácora' });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: LeadStatus) => {
+    if (!lead || newStatus === lead.status) return;
+    
+    setIsChangingStatus(true);
+    setStatusMessage(null);
+
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .update({ status: newStatus })
+        .eq('id', lead.id);
+
+      if (error) throw new Error(error.message);
+
+      const updatedLead: Lead = { ...lead, status: newStatus };
+      onLeadUpdated(updatedLead);
+      setStatusMessage({ type: 'success', text: 'Estado actualizado correctamente' });
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: err.message || 'Error al actualizar estado' });
+    } finally {
+      setIsChangingStatus(false);
     }
   };
 
@@ -403,6 +429,33 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
             {/* PESTAÑA 1: INFO GENERAL */}
             {activeTab === 'info' && (
               <div className="space-y-4 text-xs">
+                {/* Cambiar Estado / Ubicación en Kanban */}
+                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-semibold flex items-center gap-1.5">
+                      Ubicación en el Tablero Kanban
+                      {isChangingStatus && <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />}
+                    </label>
+                    <select
+                      value={lead.status}
+                      disabled={isChangingStatus}
+                      onChange={(e) => handleStatusChange(e.target.value as LeadStatus)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white disabled:opacity-50"
+                    >
+                      <option value="Nuevo">Nuevo</option>
+                      <option value="Contactado">Contactado</option>
+                      <option value="Diagnóstico">Diagnóstico</option>
+                      <option value="Demo">Demo</option>
+                      <option value="Feedback Demo">Feedback Demo</option>
+                      <option value="Propuesta">Propuesta</option>
+                      <option value="Negociación">Negociación</option>
+                      <option value="Aprobado">Aprobado</option>
+                      <option value="Convertido">Convertido</option>
+                      <option value="Cerrado-Perdido">Cerrado-Perdido</option>
+                    </select>
+                  </div>
+                </div>
+
                 {/* Contacto directo */}
                 <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
                   <div className="flex items-center justify-between">

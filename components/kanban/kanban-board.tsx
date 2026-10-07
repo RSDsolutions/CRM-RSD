@@ -8,7 +8,8 @@ import {
   DragStartEvent, 
   PointerSensor, 
   useSensor, 
-  useSensors 
+  useSensors,
+  useDroppable
 } from '@dnd-kit/core';
 import { 
   SortableContext, 
@@ -37,6 +38,33 @@ const COLUMNS: { id: LeadStatus; label: string; dotColor: string }[] = [
 
 interface KanbanBoardProps {
   initialLeads: Lead[];
+}
+
+function DroppableColumn({ col, columnLeads, children }: { col: any, columnLeads: Lead[], children: React.ReactNode }) {
+  const { setNodeRef } = useDroppable({
+    id: col.id,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      id={col.id}
+      className="flex-1 bg-slate-950/70 border border-slate-800/80 rounded-2xl flex flex-col max-h-[calc(100vh-210px)]"
+    >
+      <div className="p-3.5 border-b border-slate-800/80 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className={`w-2.5 h-2.5 rounded-full ${col.dotColor}`} />
+          <h3 className="font-semibold text-xs text-slate-200">
+            {col.label}
+          </h3>
+        </div>
+        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-slate-400">
+          {columnLeads.length}
+        </span>
+      </div>
+      {children}
+    </div>
+  );
 }
 
 export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
@@ -189,25 +217,7 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
               const columnLeads = leads.filter((l) => l.status === col.id);
 
               return (
-                <div
-                  key={col.id}
-                  id={col.id}
-                  className="flex-1 bg-slate-950/70 border border-slate-800/80 rounded-2xl flex flex-col max-h-[calc(100vh-210px)]"
-                >
-                  {/* Header de Columna */}
-                  <div className="p-3.5 border-b border-slate-800/80 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded-full ${col.dotColor}`} />
-                      <h3 className="font-semibold text-xs text-slate-200">
-                        {col.label}
-                      </h3>
-                    </div>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-slate-400">
-                      {columnLeads.length}
-                    </span>
-                  </div>
-
-                  {/* Tarjetas Droppable */}
+                <DroppableColumn key={col.id} col={col} columnLeads={columnLeads}>
                   <div className="p-3 flex-1 overflow-y-auto space-y-3 min-h-[160px]">
                     <SortableContext
                       items={columnLeads.map((l) => l.id)}
@@ -228,7 +238,7 @@ export function KanbanBoard({ initialLeads }: KanbanBoardProps) {
                       </div>
                     )}
                   </div>
-                </div>
+                </DroppableColumn>
               );
             })}
           </div>

@@ -21,13 +21,14 @@ import {
 } from 'lucide-react';
 import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { AvailabilityBlock, Meeting, MeetingStatus, UserRole } from '@/types/database.types';
+import { AvailabilityBlock, Meeting, MeetingStatus, UserRole, WeeklySchedule } from '@/types/database.types';
 import { 
   getAgendaScheduleAction, 
   createAvailabilityBlockAction, 
   deleteAvailabilityBlockAction,
   bookMeetingSlotAction,
-  updateMeetingStatusAction 
+  updateMeetingStatusAction,
+  saveWeeklySchedulesAction
 } from '@/app/actions/agenda';
 
 interface AgendaViewProps {
@@ -45,10 +46,12 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
     robinson: any;
     blocks: AvailabilityBlock[];
     meetings: Meeting[];
-  }>({ robinson: null, blocks: [], meetings: [] });
+    weeklySchedules: WeeklySchedule[];
+  }>({ robinson: null, blocks: [], meetings: [], weeklySchedules: [] });
 
   // Modales
   const [showBlockModal, setShowBlockModal] = useState(false);
+  const [showWeeklyModal, setShowWeeklyModal] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showOutcomeModal, setShowOutcomeModal] = useState<Meeting | null>(null);
   const [selectedSlotTime, setSelectedSlotTime] = useState<string>('');
@@ -80,6 +83,14 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
     endTime: '12:00',
     is_available: true,
     notes: '',
+  });
+
+  const [weeklyForm, setWeeklyForm] = useState({
+    morningStart: '09:00',
+    morningEnd: '13:00',
+    afternoonStart: '15:00',
+    afternoonEnd: '18:00',
+    days: [1, 2, 3, 4, 5], // 1=Lunes, 5=Viernes
   });
 
   const weekDays = Array.from({ length: 6 }, (_, i) => addDays(currentWeekStart, i)); // Lunes a Sábado
@@ -130,6 +141,47 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
     } else {
       setFeedback({ type: 'success', text: 'Bloque de agenda configurado correctamente.' });
       setShowBlockModal(false);
+      loadSchedule();
+    }
+  };
+
+  const handleSaveWeeklySchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setFeedback(null);
+
+    if (!scheduleData.robinson?.id) {
+      setFeedback({ type: 'error', text: 'No se encontró el perfil de Robinson.' });
+      setSubmitting(false);
+      return;
+    }
+
+    const schedulesToSave: { day_of_week: number; start_time: string; end_time: string }[] = [];
+    for (const day of weeklyForm.days) {
+      if (weeklyForm.morningStart && weeklyForm.morningEnd) {
+        schedulesToSave.push({
+          day_of_week: day,
+          start_time: weeklyForm.morningStart,
+          end_time: weeklyForm.morningEnd,
+        });
+      }
+      if (weeklyForm.afternoonStart && weeklyForm.afternoonEnd) {
+        schedulesToSave.push({
+          day_of_week: day,
+          start_time: weeklyForm.afternoonStart,
+          end_time: weeklyForm.afternoonEnd,
+        });
+      }
+    }
+
+    const res = await saveWeeklySchedulesAction(scheduleData.robinson.id, schedulesToSave);
+    setSubmitting(false);
+
+    if (!res.success) {
+      setFeedback({ type: 'error', text: res.error || 'Error al guardar el horario semanal.' });
+    } else {
+      setFeedback({ type: 'success', text: 'Horario semanal configurado correctamente.' });
+      setShowWeeklyModal(false);
       loadSchedule();
     }
   };
@@ -210,15 +262,24 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
-            <button
-              onClick={() => setShowBlockModal(true)}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 transition-colors"
-            >
-              <Plus className="w-4 h-4 text-indigo-400" />
-              Definir Horarios / Bloqueos
-            </button>
+            <>
+              <button
+                onClick={() => setShowWeeklyModal(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 transition-colors"
+              >
+                <Calendar className="w-4 h-4 text-emerald-400" />
+                Configurar Horario Semanal
+              </button>
+              <button
+                onClick={() => setShowBlockModal(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 transition-colors"
+              >
+                <Plus className="w-4 h-4 text-indigo-400" />
+                Definir Excepción / Bloqueo
+              </button>
+            </>
           )}
 
           <button
@@ -307,6 +368,7 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
           {weekDays.map((day) => {
             const dayMeetings = scheduleData.meetings.filter(m => isSameDay(parseISO(m.start_time), day));
             const dayBlocks = scheduleData.blocks.filter(b => isSameDay(parseISO(b.start_time), day));
+            const dayWeeklySchedules = scheduleData.weeklySchedules.filter(s => s.day_of_week === (day.getDay() || 7));
             const isToday = isSameDay(day, new Date());
 
             return (
@@ -330,6 +392,19 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
 
                 {/* Eventos del día */}
                 <div className="p-2 space-y-2 flex-1 overflow-y-auto">
+                  {/* Horario Semanal */}
+                  {dayWeeklySchedules.map(ws => (
+                    <div key={ws.id} className="p-2 rounded-lg text-[11px] border bg-emerald-500/5 border-emerald-500/10 text-emerald-400">
+                      <div className="font-semibold flex items-center justify-between">
+                        <span>Horario Disponible</span>
+                      </div>
+                      <div className="text-[10px] text-emerald-500/70 mt-0.5 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {ws.start_time.slice(0,5)} - {ws.end_time.slice(0,5)}
+                      </div>
+                    </div>
+                  ))}
+
                   {/* Bloques de disponibilidad / Bloqueos */}
                   {dayBlocks.map(block => (
                     <div 
@@ -510,6 +585,92 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
                   className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold disabled:opacity-50"
                 >
                   {submitting ? 'Guardando...' : 'Guardar Bloque'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: HORARIO SEMANAL RECURRENTE (Admin) */}
+      {showWeeklyModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-emerald-400" />
+                Configurar Horario Semanal
+              </h2>
+              <button onClick={() => setShowWeeklyModal(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <p className="text-[11px] text-slate-400">
+              Define tu disponibilidad base para diagnósticos y reuniones de Lunes a Viernes. Las citas solo podrán agendarse dentro de estos bloques.
+            </p>
+
+            <form onSubmit={handleSaveWeeklySchedule} className="space-y-4 text-xs">
+              <div className="space-y-2">
+                <h3 className="font-semibold text-slate-300">Bloque Mañana</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 mb-1">Hora Inicio</label>
+                    <input
+                      type="time"
+                      value={weeklyForm.morningStart}
+                      onChange={e => setWeeklyForm({ ...weeklyForm, morningStart: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">Hora Fin</label>
+                    <input
+                      type="time"
+                      value={weeklyForm.morningEnd}
+                      onChange={e => setWeeklyForm({ ...weeklyForm, morningEnd: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="font-semibold text-slate-300">Bloque Tarde</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 mb-1">Hora Inicio</label>
+                    <input
+                      type="time"
+                      value={weeklyForm.afternoonStart}
+                      onChange={e => setWeeklyForm({ ...weeklyForm, afternoonStart: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">Hora Fin</label>
+                    <input
+                      type="time"
+                      value={weeklyForm.afternoonEnd}
+                      onChange={e => setWeeklyForm({ ...weeklyForm, afternoonEnd: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowWeeklyModal(false)}
+                  className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold disabled:opacity-50"
+                >
+                  {submitting ? 'Guardando...' : 'Guardar Horario'}
                 </button>
               </div>
             </form>

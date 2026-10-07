@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/utils/supabase/server';
-import { AvailabilityBlock, Meeting, MeetingStatus } from '@/types/database.types';
+import { AvailabilityBlock, Meeting, MeetingStatus, WeeklySchedule } from '@/types/database.types';
 
 /**
  * Obtiene los bloques de disponibilidad y los horarios ya reservados.
@@ -41,10 +41,19 @@ export async function getAgendaScheduleAction(startDate: string, endDate: string
     .neq('status', 'Cancelada')
     .order('start_time', { ascending: true });
 
+  // 4. Obtener horario semanal configurado
+  const { data: weeklySchedules } = await supabase
+    .from('weekly_schedules')
+    .select('*')
+    .eq('user_id', robinsonId || '')
+    .order('day_of_week', { ascending: true })
+    .order('start_time', { ascending: true });
+
   return {
     robinson: adminProfiles?.[0] || null,
     blocks: (blocks as AvailabilityBlock[]) || [],
     meetings: (meetings as Meeting[]) || [],
+    weeklySchedules: (weeklySchedules as WeeklySchedule[]) || [],
   };
 }
 
@@ -131,6 +140,58 @@ export async function bookMeetingSlotAction(payload: {
   }
 
   try {
+    // Opcional: Validar disponibilidad semanal en servidor (simplificado). 
+    // Para no complicar con zonas horarias en SQL, validamos aquí en TS o confiamos en el cliente y la función SQL (que detecta solapamientos).
+    // Nota: El RPC `book_meeting_slot` solo revisa `is_available = false` y reuniones traslapadas.
+    // Si queremos obligar horario semanal, lo verificamos:
+    
+    const { data: weeklyData } = await supabase
+      .from('weekly_schedules')
+      .select('*')
+      .eq('user_id', payload.host_id);
+    
+    if (weeklyData && weeklyData.length > 0) {
+      // Tiene horarios semanales configurados. Verificar si el horario solicitado cae dentro.
+      const startDate = new Date(payload.start_time);
+      const endDate = new Date(payload.end_time);
+      
+      const dayOfWeek = startDate.getDay() || 7; // getDay: 0=Dom, 1=Lun. Convertimos Dom a 7
+      
+      const startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
+      const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
+
+      let isWithinWeekly = false;
+      for (const schedule of weeklyData) {
+        if (schedule.day_of_week === dayOfWeek) {
+          const [sH, sM] = schedule.start_time.split(':').map(Number);
+          const [eH, eM] = schedule.end_time.split(':').map(Number);
+          const blockStartMinutes = sH * 60 + sM;
+          const blockEndMinutes = eH * 60 + eM;
+          
+          if (startMinutes >= blockStartMinutes && endMinutes <= blockEndMinutes) {
+            isWithinWeekly = true;
+            break;
+          }
+        }
+      }
+      
+      // Si no está en el horario semanal, verificamos si hay un bloque explícito 'is_available = true'
+      if (!isWithinWeekly) {
+        const { data: availBlock } = await supabase
+          .from('availability_blocks')
+          .select('id')
+          .eq('user_id', payload.host_id)
+          .eq('is_available', true)
+          .lte('start_time', payload.start_time)
+          .gte('end_time', payload.end_time)
+          .limit(1);
+          
+        if (!availBlock || availBlock.length === 0) {
+          return { success: false, error: 'El horario seleccionado está fuera del horario semanal de disponibilidad configurado.' };
+        }
+      }
+    }
+
     const { data: meetingId, error } = await supabase.rpc('book_meeting_slot', {
       p_title: payload.title,
       p_meeting_type: payload.meeting_type || 'Diagnóstico',
@@ -237,4 +298,45 @@ export async function updateMeetingStatusAction(
   revalidatePath('/agenda');
   revalidatePath('/');
   return { success: true, meeting: data };
+}
+
+/**
+ * Guarda o actualiza los horarios semanales de un usuario.
+ */
+export async function saveWeeklySchedulesAction(
+  userId: string,
+  schedules: { day_of_week: number; start_time: string; end_time: string }[]
+) {
+  const supabase = createClient();
+  const { data: userData } = await supabase.auth.getUser();
+
+  if (!userData?.user || userData.user.id !== userId) {
+    // Si no es el propio usuario, verificamos si es admin
+    const { data: adminProfiles } = await supabase.from('profiles').select('role').eq('id', userData?.user?.id || '').single();
+    if (adminProfiles?.role !== 'admin') {
+      return { success: false, error: 'No tienes permisos para modificar este horario.' };
+    }
+  }
+
+  // Borrar horarios actuales
+  await supabase.from('weekly_schedules').delete().eq('user_id', userId);
+
+  if (schedules.length > 0) {
+    // Insertar los nuevos
+    const { error } = await supabase.from('weekly_schedules').insert(
+      schedules.map(s => ({
+        user_id: userId,
+        day_of_week: s.day_of_week,
+        start_time: s.start_time,
+        end_time: s.end_time,
+      }))
+    );
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  revalidatePath('/agenda');
+  return { success: true };
 }
