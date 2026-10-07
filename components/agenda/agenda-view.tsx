@@ -678,137 +678,185 @@ export function AgendaView({ initialRole, userEmail }: AgendaViewProps) {
         </div>
       )}
 
-      {/* MODAL: RESERVA DE CITA (Asesor/Admin) */}
+      {/* SHEET: RESERVA DE CITA (Asesor/Admin) */}
       {showBookingModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
-            <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-indigo-400" />
-                  Reservar Cita con Robinson Solórzano
-                </h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Validación atómica contra colisiones en tiempo real.
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="absolute inset-y-0 right-0 max-w-full flex pl-10 sm:pl-16">
+            <div className="w-screen max-w-md bg-slate-900 border-l border-slate-800 shadow-2xl flex flex-col">
+              
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-slate-800 bg-slate-950/50 flex flex-col gap-1 relative">
+                <button 
+                  onClick={() => setShowBookingModal(false)} 
+                  className="absolute top-5 right-5 p-2 bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-colors"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center mb-2 border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+                  <Calendar className="w-5 h-5 text-indigo-400" />
+                </div>
+                <h2 className="text-xl font-bold text-white tracking-tight">Agendar Nueva Cita</h2>
+                <p className="text-xs text-slate-400">
+                  Reserva un bloque en la agenda de Robinson. Se validarán colisiones en tiempo real.
                 </p>
               </div>
-              <button onClick={() => setShowBookingModal(false)} className="text-slate-400 hover:text-white">✕</button>
-            </div>
 
-            <form onSubmit={handleBookMeeting} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">Tipo de Reunión</label>
-                <select
-                  value={bookingForm.meeting_type}
-                  onChange={e => setBookingForm({ ...bookingForm, meeting_type: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                >
-                  <option value="Diagnóstico">Diagnóstico Gratuito (30 min)</option>
-                  <option value="Presentación de Demo">Presentación de Demo Funcional</option>
-                  <option value="Revisión de Propuesta">Revisión de Propuesta y Alcance</option>
-                  <option value="Seguimiento">Seguimiento Comercial / Proyecto</option>
-                  <option value="Soporte">Soporte Técnico Especializado</option>
-                </select>
+              {/* Form Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                <form onSubmit={handleBookMeeting} className="space-y-6">
+                  
+                  {/* Bloque 1: Horario */}
+                  <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 space-y-4 shadow-sm">
+                    <h3 className="text-[11px] uppercase tracking-wider font-bold text-indigo-400 flex items-center gap-1.5 border-b border-slate-800/80 pb-2">
+                      <Clock className="w-3.5 h-3.5" /> 1. Fecha y Hora
+                    </h3>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Hora Inicio</label>
+                        <input
+                          type="datetime-local"
+                          value={bookingForm.startTime.slice(0, 16)}
+                          onChange={e => setBookingForm({ ...bookingForm, startTime: new Date(e.target.value).toISOString() })}
+                          className="w-full bg-slate-900 border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-3 py-2.5 text-sm text-white font-medium transition-colors"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Hora Fin</label>
+                        <input
+                          type="datetime-local"
+                          value={bookingForm.endTime.slice(0, 16)}
+                          onChange={e => setBookingForm({ ...bookingForm, endTime: new Date(e.target.value).toISOString() })}
+                          className="w-full bg-slate-900 border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-3 py-2.5 text-sm text-white font-medium transition-colors"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bloque 2: Información del Cliente */}
+                  <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 space-y-4 shadow-sm">
+                    <h3 className="text-[11px] uppercase tracking-wider font-bold text-emerald-400 flex items-center gap-1.5 border-b border-slate-800/80 pb-2">
+                      <User className="w-3.5 h-3.5" /> 2. Datos del Prospecto
+                    </h3>
+                    
+                    <div className="space-y-3 text-sm">
+                      <div>
+                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Empresa / Negocio</label>
+                        <div className="relative">
+                          <Building2 className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                          <input
+                            type="text"
+                            placeholder="Ej. Clínica Dental"
+                            value={bookingForm.companyName}
+                            onChange={e => setBookingForm({ ...bookingForm, companyName: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl pl-9 pr-3 py-2.5 text-white transition-colors"
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Contacto Principal</label>
+                        <div className="relative">
+                          <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                          <input
+                            type="text"
+                            placeholder="Nombre del cliente"
+                            value={bookingForm.leadName}
+                            onChange={e => setBookingForm({ ...bookingForm, leadName: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl pl-9 pr-3 py-2.5 text-white transition-colors"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bloque 3: Modalidad y Detalles */}
+                  <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 space-y-4 shadow-sm">
+                    <h3 className="text-[11px] uppercase tracking-wider font-bold text-sky-400 flex items-center gap-1.5 border-b border-slate-800/80 pb-2">
+                      <FileCheck className="w-3.5 h-3.5" /> 3. Detalles de la Cita
+                    </h3>
+                    
+                    <div className="space-y-3 text-sm">
+                      <div>
+                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Tipo de Reunión</label>
+                        <select
+                          value={bookingForm.meeting_type}
+                          onChange={e => setBookingForm({ ...bookingForm, meeting_type: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 focus:border-sky-500 rounded-xl px-3 py-2.5 text-white transition-colors"
+                        >
+                          <option value="Diagnóstico">Diagnóstico Gratuito (30 min)</option>
+                          <option value="Presentación de Demo">Presentación de Demo Funcional</option>
+                          <option value="Revisión de Propuesta">Revisión de Propuesta y Alcance</option>
+                          <option value="Seguimiento">Seguimiento Comercial / Proyecto</option>
+                          <option value="Soporte">Soporte Técnico Especializado</option>
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] text-slate-400 font-semibold mb-1">Modalidad</label>
+                          <select
+                            value={bookingForm.modality}
+                            onChange={e => setBookingForm({ ...bookingForm, modality: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 focus:border-sky-500 rounded-xl px-3 py-2.5 text-white transition-colors"
+                          >
+                            <option value="Virtual">Virtual (G-Meet)</option>
+                            <option value="Presencial">Presencial</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] text-slate-400 font-semibold mb-1">Enlace / Ubicación</label>
+                          <div className="relative">
+                            {bookingForm.modality === 'Virtual' ? (
+                              <Video className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-3" />
+                            ) : (
+                              <MapPin className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-3" />
+                            )}
+                            <input
+                              type="text"
+                              value={bookingForm.meetingUrl}
+                              onChange={e => setBookingForm({ ...bookingForm, meetingUrl: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 focus:border-sky-500 rounded-xl pl-8 pr-2 py-2.5 text-white transition-colors"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-400 font-semibold mb-1">Objetivo / Tema a Tratar</label>
+                        <input
+                          type="text"
+                          value={bookingForm.objective}
+                          onChange={e => setBookingForm({ ...bookingForm, objective: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 focus:border-sky-500 rounded-xl px-3 py-2.5 text-white transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                </form>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Empresa / Negocio</label>
-                  <input
-                    type="text"
-                    placeholder="Ej. Clínica Dental"
-                    value={bookingForm.companyName}
-                    onChange={e => setBookingForm({ ...bookingForm, companyName: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Contacto Principal</label>
-                  <input
-                    type="text"
-                    placeholder="Nombre del cliente"
-                    value={bookingForm.leadName}
-                    onChange={e => setBookingForm({ ...bookingForm, leadName: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Hora Inicio</label>
-                  <input
-                    type="datetime-local"
-                    value={bookingForm.startTime.slice(0, 16)}
-                    onChange={e => setBookingForm({ ...bookingForm, startTime: new Date(e.target.value).toISOString() })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Hora Fin</label>
-                  <input
-                    type="datetime-local"
-                    value={bookingForm.endTime.slice(0, 16)}
-                    onChange={e => setBookingForm({ ...bookingForm, endTime: new Date(e.target.value).toISOString() })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Modalidad</label>
-                  <select
-                    value={bookingForm.modality}
-                    onChange={e => setBookingForm({ ...bookingForm, modality: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                  >
-                    <option value="Virtual">Virtual (Google Meet)</option>
-                    <option value="Presencial">Presencial en oficinas</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Enlace de Reunión</label>
-                  <input
-                    type="text"
-                    value={bookingForm.meetingUrl}
-                    onChange={e => setBookingForm({ ...bookingForm, meetingUrl: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">Objetivo de la Reunión</label>
-                <input
-                  type="text"
-                  value={bookingForm.objective}
-                  onChange={e => setBookingForm({ ...bookingForm, objective: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowBookingModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700"
-                >
-                  Cancelar
-                </button>
+              {/* Footer Fijo */}
+              <div className="p-5 border-t border-slate-800 bg-slate-950/80">
                 <button
                   type="submit"
+                  onClick={handleBookMeeting}
                   disabled={submitting}
-                  className="px-5 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-semibold shadow-lg shadow-indigo-500/20 disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold text-sm shadow-[0_0_20px_rgba(99,102,241,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5"
                 >
-                  {submitting ? 'Confirmando...' : 'Confirmar Reserva'}
+                  {submitting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Confirmando Reserva...</>
+                  ) : (
+                    <><CheckCircle2 className="w-5 h-5" /> Agendar y Confirmar Cita</>
+                  )}
                 </button>
               </div>
-            </form>
+
+            </div>
           </div>
         </div>
       )}
