@@ -174,3 +174,85 @@ export async function createEnrichedLeadAction(payload: Partial<Lead>) {
   revalidatePath('/');
   return { success: true, lead: data };
 }
+
+/**
+ * Actualiza la información inicial y de calificación de un lead o prospecto
+ * a medida que avanza la venta y se descubren nuevos datos.
+ */
+export async function updateLeadDetailsAction(leadId: string, payload: Partial<Lead>) {
+  if (!leadId) {
+    return { success: false, error: 'ID de lead no válido' };
+  }
+
+  const supabase = createClient();
+  const { data: userData } = await supabase.auth.getUser();
+
+  const updateData: Record<string, any> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (payload.company_name !== undefined) updateData.company_name = payload.company_name?.trim() || '';
+  if (payload.contact_name !== undefined) updateData.contact_name = payload.contact_name?.trim() || '';
+  if (payload.contact_role !== undefined) updateData.contact_role = payload.contact_role?.trim() || null;
+  if (payload.phone !== undefined) updateData.phone = payload.phone?.trim() || null;
+  if (payload.email !== undefined) updateData.email = payload.email?.trim() || null;
+  if (payload.contact_preference !== undefined) updateData.contact_preference = payload.contact_preference || 'WhatsApp';
+  
+  if (payload.software_type !== undefined) updateData.software_type = payload.software_type;
+  if (payload.niche !== undefined) updateData.niche = payload.niche;
+  if (payload.current_management_method !== undefined) updateData.current_management_method = payload.current_management_method;
+  if (payload.team_size !== undefined) updateData.team_size = payload.team_size?.trim() || null;
+  if (payload.reference_budget !== undefined) updateData.reference_budget = payload.reference_budget?.trim() || null;
+  if (payload.main_need !== undefined) updateData.main_need = payload.main_need?.trim() || null;
+  if (payload.problem_description !== undefined) updateData.problem_description = payload.problem_description?.trim() || null;
+
+  if (payload.legal_name !== undefined) updateData.legal_name = payload.legal_name?.trim() || null;
+  if (payload.tax_id !== undefined) updateData.tax_id = payload.tax_id?.trim() || null;
+  if (payload.city !== undefined) updateData.city = payload.city?.trim() || null;
+  if (payload.province !== undefined) updateData.province = payload.province?.trim() || null;
+  if (payload.website !== undefined) updateData.website = payload.website?.trim() || null;
+  if (payload.social_media !== undefined) updateData.social_media = payload.social_media?.trim() || null;
+
+  if (payload.lead_source !== undefined) updateData.lead_source = payload.lead_source;
+  if (payload.campaign !== undefined) updateData.campaign = payload.campaign?.trim() || null;
+  if (payload.priority !== undefined) updateData.priority = payload.priority;
+  if (payload.assigned_to !== undefined) updateData.assigned_to = payload.assigned_to?.trim() || '';
+  if (payload.status !== undefined) updateData.status = payload.status;
+  if (payload.next_action !== undefined) updateData.next_action = payload.next_action?.trim() || null;
+  if (payload.next_followup_date !== undefined) updateData.next_followup_date = payload.next_followup_date || null;
+  if (payload.interaction_log !== undefined) updateData.interaction_log = payload.interaction_log;
+
+  const { data, error } = await supabase
+    .from('leads')
+    .update(updateData)
+    .eq('id', leadId)
+    .select()
+    .single();
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  // Registrar actividad automática de actualización informativa
+  try {
+    await supabase.from('activities').insert([
+      {
+        lead_id: leadId,
+        activity_type: 'Nota interna',
+        user_id: userData?.user?.id || null,
+        summary: 'Ficha comercial y datos del prospecto actualizados con nuevos avances de la venta.',
+        visibility: 'Interno',
+        status: 'Realizada',
+      },
+    ]);
+  } catch (actErr) {
+    console.warn('Advertencia al registrar actividad de actualización:', actErr);
+  }
+
+  revalidatePath('/');
+  revalidatePath('/leads');
+  revalidatePath('/dashboard');
+
+  return { success: true, lead: data as Lead };
+}
+

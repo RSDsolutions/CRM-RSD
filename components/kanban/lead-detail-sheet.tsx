@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Lead, Activity, Task, LeadStatus } from '@/types/database.types';
+import { Lead, Activity, Task, LeadStatus, BUSINESS_NICHES, BusinessNiche, SoftwareType } from '@/types/database.types';
 import { createClient } from '@/utils/supabase/client';
 import { convertLeadToClientAction } from '@/app/actions/clients';
 import { getLeadActivitiesAction, createActivityAction } from '@/app/actions/activities';
 import { getLeadTasksAction, createTaskAction, updateTaskStatusAction } from '@/app/actions/tasks';
 import { recordLostOpportunityAction } from '@/app/actions/retention-referrals';
 import { getCompanyDNAAction, saveCompanyDNAAction } from '@/app/actions/dna';
+import { updateLeadDetailsAction, getComercialAdvisorsAction } from '@/app/actions/leads';
 import { CompanyDNA } from '@/types/database.types';
 import { 
   X, 
@@ -35,7 +36,12 @@ import {
   CalendarCheck,
   Send,
   Sparkles,
-  Briefcase
+  Briefcase,
+  Pencil,
+  Globe,
+  MapPin,
+  MessageCircle,
+  ExternalLink
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -58,6 +64,12 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
   const [isConverting, setIsConverting] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Modo Edición de Información del Prospecto/Cliente
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
+  const [isSavingInfo, setIsSavingInfo] = useState(false);
+  const [advisors, setAdvisors] = useState<string[]>([]);
+  const [infoForm, setInfoForm] = useState<Partial<Lead>>({});
 
   // Actividades
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -93,11 +105,45 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
     if (lead) {
       setLogText(lead.interaction_log);
       setStatusMessage(null);
+      setIsEditingInfo(false);
+      setInfoForm({
+        company_name: lead.company_name,
+        legal_name: lead.legal_name || '',
+        tax_id: lead.tax_id || '',
+        niche: lead.niche || 'Distribuidora / mayorista',
+        city: lead.city || '',
+        province: lead.province || '',
+        website: lead.website || '',
+        social_media: lead.social_media || '',
+        contact_name: lead.contact_name,
+        contact_role: lead.contact_role || '',
+        phone: lead.phone || '',
+        email: lead.email || '',
+        contact_preference: lead.contact_preference || 'WhatsApp',
+        software_type: lead.software_type,
+        current_management_method: lead.current_management_method || 'Excel',
+        team_size: lead.team_size || '',
+        reference_budget: lead.reference_budget || '',
+        main_need: lead.main_need || '',
+        problem_description: lead.problem_description || '',
+        assigned_to: lead.assigned_to,
+        priority: lead.priority || 'Media',
+        next_action: lead.next_action || '',
+        next_followup_date: lead.next_followup_date ? lead.next_followup_date.slice(0, 16) : '',
+      });
       loadActivities(lead.id);
       loadTasks(lead.id);
       loadDna(lead.id);
+      loadAdvisors();
     }
   }, [lead]);
+
+  const loadAdvisors = async () => {
+    const res = await getComercialAdvisorsAction();
+    if (res.success && res.advisors) {
+      setAdvisors(res.advisors);
+    }
+  };
 
   const loadDna = async (leadId: string) => {
     setLoadingDna(true);
@@ -163,6 +209,60 @@ ${dna.identified_pain_points || lead?.problem_description || lead?.main_need || 
     lead.status === 'Propuesta' ||
     lead.status === 'Negociación' ||
     lead.status === 'Aprobado';
+
+  const handleSaveInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lead) return;
+    if (!infoForm.company_name?.trim() || !infoForm.contact_name?.trim()) {
+      setStatusMessage({ type: 'error', text: 'El nombre de empresa y del contacto son obligatorios' });
+      return;
+    }
+
+    setIsSavingInfo(true);
+    setStatusMessage(null);
+
+    try {
+      const payload: Partial<Lead> = {
+        company_name: infoForm.company_name?.trim(),
+        legal_name: infoForm.legal_name?.trim() || null,
+        tax_id: infoForm.tax_id?.trim() || null,
+        niche: infoForm.niche,
+        city: infoForm.city?.trim() || null,
+        province: infoForm.province?.trim() || null,
+        website: infoForm.website?.trim() || null,
+        social_media: infoForm.social_media?.trim() || null,
+        contact_name: infoForm.contact_name?.trim(),
+        contact_role: infoForm.contact_role?.trim() || null,
+        phone: infoForm.phone?.trim() || null,
+        email: infoForm.email?.trim() || null,
+        contact_preference: infoForm.contact_preference,
+        software_type: infoForm.software_type,
+        current_management_method: infoForm.current_management_method,
+        team_size: infoForm.team_size?.trim() || null,
+        reference_budget: infoForm.reference_budget?.trim() || null,
+        main_need: infoForm.main_need?.trim() || null,
+        problem_description: infoForm.problem_description?.trim() || null,
+        assigned_to: infoForm.assigned_to?.trim(),
+        priority: infoForm.priority,
+        next_action: infoForm.next_action?.trim(),
+        next_followup_date: infoForm.next_followup_date ? new Date(infoForm.next_followup_date).toISOString() : null,
+      };
+
+      const res = await updateLeadDetailsAction(lead.id, payload);
+      if (!res.success || !res.lead) {
+        throw new Error(res.error || 'Error al actualizar los datos del cliente/prospecto');
+      }
+
+      onLeadUpdated(res.lead);
+      setStatusMessage({ type: 'success', text: '✅ Ficha comercial del cliente actualizada correctamente.' });
+      setIsEditingInfo(false);
+      setTimeout(() => setStatusMessage(null), 3500);
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: err.message || 'Error al guardar los cambios' });
+    } finally {
+      setIsSavingInfo(false);
+    }
+  };
 
   const handleSaveLog = async () => {
     setIsSaving(true);
@@ -555,122 +655,561 @@ ${dna.identified_pain_points || lead?.problem_description || lead?.main_need || 
               </div>
             )}
 
-            {/* PESTAÑA 1: RESUMEN GENERAL */}
+            {/* PESTAÑA 1: RESUMEN GENERAL & EDICIÓN COMERCIAL */}
             {activeTab === 'info' && (
               <div className="space-y-4 text-xs">
-                {/* Cambiar Estado / Ubicación en Kanban */}
-                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-2">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-slate-400 uppercase font-semibold flex items-center justify-between">
-                      <span>Etapa en Pipeline Kanban</span>
-                      {isChangingStatus && <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />}
-                    </label>
-                    <select
-                      value={lead.status}
-                      disabled={isChangingStatus}
-                      onChange={(e) => handleStatusChange(e.target.value as LeadStatus)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-semibold focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                {/* Header de la Ficha con botón de Editar */}
+                <div className="flex items-center justify-between pb-1">
+                  <div>
+                    <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                      <Building2 className="w-4 h-4 text-indigo-400" />
+                      Ficha Comercial del Prospecto
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      {isEditingInfo 
+                        ? 'Actualiza los datos según los nuevos requerimientos descubiertos.'
+                        : 'Información inicial y progreso de calificación de la venta.'}
+                    </p>
+                  </div>
+                  {!isEditingInfo ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingInfo(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all shadow-sm"
                     >
-                      <option value="Nuevo">Nuevo</option>
-                      <option value="Contactado">Contactado</option>
-                      <option value="Diagnóstico">Diagnóstico</option>
-                      <option value="Demo">Demo</option>
-                      <option value="Feedback Demo">Feedback Demo</option>
-                      <option value="Propuesta">Propuesta</option>
-                      <option value="Negociación">Negociación</option>
-                      <option value="Aprobado">Aprobado</option>
-                      <option value="Convertido">Convertido</option>
-                      <option value="Cerrado-Perdido">Cerrado-Perdido</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Contacto directo */}
-                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                    <span className="text-slate-400 flex items-center gap-1.5 font-medium">
-                      <User className="w-3.5 h-3.5 text-indigo-400" /> Contacto Principal
-                    </span>
-                    <span className="text-white font-bold">{lead.contact_name}</span>
-                  </div>
-
-                  {lead.contact_role && (
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span>Cargo / Rol:</span>
-                      <span className="text-slate-200">{lead.contact_role}</span>
-                    </div>
-                  )}
-
-                  {lead.phone && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400 flex items-center gap-1.5">
-                        <Phone className="w-3.5 h-3.5 text-indigo-400" /> Teléfono
-                      </span>
-                      <a href={`tel:${lead.phone}`} className="text-indigo-400 hover:underline font-mono">
-                        {lead.phone}
-                      </a>
-                    </div>
-                  )}
-
-                  {lead.email && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400 flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5 text-indigo-400" /> Correo
-                      </span>
-                      <a href={`mailto:${lead.email}`} className="text-indigo-400 hover:underline">
-                        {lead.email}
-                      </a>
-                    </div>
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Editar Ficha</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingInfo(false)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-[11px] font-medium transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Cancelar</span>
+                    </button>
                   )}
                 </div>
 
-                {/* Negocio y requerimiento */}
-                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Nicho Empresarial:</span>
-                    <span className="text-slate-200 font-semibold">{lead.niche || 'No especificado'}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Solución Prevista:</span>
-                    <span className="text-indigo-300 font-semibold">{lead.software_type}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Método Actual:</span>
-                    <span className="text-slate-300">{lead.current_management_method || 'Excel'}</span>
-                  </div>
-
-                  {lead.team_size && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Tamaño Equipo:</span>
-                      <span className="text-slate-300">{lead.team_size}</span>
+                {isEditingInfo ? (
+                  /* ─── FORMULARIO DE EDICIÓN COMPLETA ─── */
+                  <form onSubmit={handleSaveInfo} className="space-y-4">
+                    {/* Sección 1: Datos de la Empresa */}
+                    <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800/80">
+                        <Building2 className="w-4 h-4 text-indigo-400" />
+                        <span className="font-bold text-white text-xs uppercase tracking-wider">1. Empresa & Negocio</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="sm:col-span-2">
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Nombre Comercial de la Empresa *</label>
+                          <input
+                            type="text"
+                            required
+                            value={infoForm.company_name || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, company_name: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="Ej. Distribuidora del Pacífico S.A."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Razón Social (Legal)</label>
+                          <input
+                            type="text"
+                            value={infoForm.legal_name || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, legal_name: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="Ej. Dispacif Cía. Ltda."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">RUC / Cédula</label>
+                          <input
+                            type="text"
+                            value={infoForm.tax_id || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, tax_id: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500 font-mono"
+                            placeholder="0992345678001"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Nicho Empresarial</label>
+                          <select
+                            value={infoForm.niche || 'Distribuidora / mayorista'}
+                            onChange={e => setInfoForm(prev => ({ ...prev, niche: e.target.value as BusinessNiche }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                          >
+                            {BUSINESS_NICHES.map(n => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Ciudad</label>
+                          <input
+                            type="text"
+                            value={infoForm.city || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, city: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="Ej. Guayaquil"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Sitio Web</label>
+                          <input
+                            type="url"
+                            value={infoForm.website || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, website: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="https://empresa.com"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Redes Sociales / Perfil</label>
+                          <input
+                            type="text"
+                            value={infoForm.social_media || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, social_media: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="@empresa_ec"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  )}
 
-                  {lead.reference_budget && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Presupuesto Referencial:</span>
-                      <span className="text-emerald-400 font-semibold">{lead.reference_budget}</span>
+                    {/* Sección 2: Contacto Decisor */}
+                    <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800/80">
+                        <User className="w-4 h-4 text-indigo-400" />
+                        <span className="font-bold text-white text-xs uppercase tracking-wider">2. Contacto Directo</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Nombre del Decisor *</label>
+                          <input
+                            type="text"
+                            required
+                            value={infoForm.contact_name || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, contact_name: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="Ej. Ing. Carlos Mendoza"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Cargo / Rol</label>
+                          <input
+                            type="text"
+                            value={infoForm.contact_role || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, contact_role: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="Gerente General / Propietario"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Teléfono / WhatsApp Directo</label>
+                          <input
+                            type="text"
+                            value={infoForm.phone || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, phone: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500 font-mono"
+                            placeholder="0991234567 / +593..."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Correo Electrónico</label>
+                          <input
+                            type="email"
+                            value={infoForm.email || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, email: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="gerencia@empresa.com"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Canal Preferido</label>
+                          <select
+                            value={infoForm.contact_preference || 'WhatsApp'}
+                            onChange={e => setInfoForm(prev => ({ ...prev, contact_preference: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="WhatsApp">WhatsApp</option>
+                            <option value="Llamada">Llamada Telefónica</option>
+                            <option value="Correo">Correo Electrónico</option>
+                            <option value="Reunión Virtual">Reunión Virtual (Meet)</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Próxima Acción Comercial */}
-                <div className="p-4 bg-indigo-950/20 border border-indigo-500/30 rounded-xl space-y-2">
-                  <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider flex items-center gap-1.5">
-                    <Clock className="w-3 h-3" /> Próximo Paso Comercial
-                  </span>
-                  <p className="text-slate-200 font-medium text-xs leading-relaxed">
-                    {lead.next_action || 'Contactar para agendar diagnóstico gratuito'}
-                  </p>
-                  {lead.next_followup_date && (
-                    <div className="text-[11px] text-indigo-300 flex items-center gap-1.5 mt-1">
-                      <span>Programado para:</span>
-                      <strong>{format(parseISO(lead.next_followup_date), "d 'de' MMMM, HH:mm 'hrs'", { locale: es })}</strong>
+                    {/* Sección 3: Requerimiento de Software & Diagnóstico */}
+                    <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800/80">
+                        <Laptop className="w-4 h-4 text-indigo-400" />
+                        <span className="font-bold text-white text-xs uppercase tracking-wider">3. Requerimiento & Diagnóstico</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Tipo de Software Previsto</label>
+                          <select
+                            value={infoForm.software_type || 'ERP/CRM'}
+                            onChange={e => setInfoForm(prev => ({ ...prev, software_type: e.target.value as SoftwareType }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="ERP/CRM">ERP/CRM</option>
+                            <option value="Web App">Web App</option>
+                            <option value="Mobile App">Mobile App</option>
+                            <option value="E-commerce">E-commerce</option>
+                            <option value="Landing Page">Landing Page</option>
+                            <option value="Otro">Otro</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Método de Gestión Actual</label>
+                          <input
+                            type="text"
+                            value={infoForm.current_management_method || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, current_management_method: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="Excel, hojas de papel, software genérico..."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Tamaño del Equipo / Usuarios</label>
+                          <input
+                            type="text"
+                            value={infoForm.team_size || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, team_size: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="5 a 15 personas"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Presupuesto Referencial Estimado</label>
+                          <input
+                            type="text"
+                            value={infoForm.reference_budget || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, reference_budget: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="$2,000 - $3,500"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Necesidad Principal</label>
+                          <input
+                            type="text"
+                            value={infoForm.main_need || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, main_need: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="Control de stock en 2 sucursales y facturación automatizada"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Problema / Cuello de Botella Detallado</label>
+                          <textarea
+                            rows={3}
+                            value={infoForm.problem_description || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, problem_description: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white text-xs leading-relaxed focus:outline-none focus:border-indigo-500"
+                            placeholder="Describe qué les duele hoy en la operación, tiempos perdidos o errores frecuentes..."
+                          />
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
+
+                    {/* Sección 4: Gestión Comercial & Próximo Paso */}
+                    <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800/80">
+                        <UserCheck className="w-4 h-4 text-indigo-400" />
+                        <span className="font-bold text-white text-xs uppercase tracking-wider">4. Gestión & Seguimiento</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Asesor Responsable</label>
+                          {advisors.length > 0 ? (
+                            <select
+                              value={infoForm.assigned_to || ''}
+                              onChange={e => setInfoForm(prev => ({ ...prev, assigned_to: e.target.value }))}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            >
+                              {advisors.map(adv => (
+                                <option key={adv} value={adv}>{adv}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={infoForm.assigned_to || ''}
+                              onChange={e => setInfoForm(prev => ({ ...prev, assigned_to: e.target.value }))}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Prioridad del Negocio</label>
+                          <select
+                            value={infoForm.priority || 'Media'}
+                            onChange={e => setInfoForm(prev => ({ ...prev, priority: e.target.value as any }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="Alta">Alta</option>
+                            <option value="Media">Media</option>
+                            <option value="Baja">Baja</option>
+                          </select>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Próxima Acción Comercial</label>
+                          <input
+                            type="text"
+                            value={infoForm.next_action || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, next_action: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500"
+                            placeholder="Llamar para confirmar asistencia a la demo técnica..."
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">Fecha & Hora de Próximo Seguimiento</label>
+                          <input
+                            type="datetime-local"
+                            value={infoForm.next_followup_date || ''}
+                            onChange={e => setInfoForm(prev => ({ ...prev, next_followup_date: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-indigo-500 font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Botones de acción del formulario */}
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingInfo(false)}
+                        className="px-4 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-semibold transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSavingInfo}
+                        className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/25 transition-all disabled:opacity-50"
+                      >
+                        {isSavingInfo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        <span>Guardar Cambios</span>
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  /* ─── MODO VISTA COMPLETO & ENRIQUECIDO ─── */
+                  <div className="space-y-4">
+                    {/* Cambiar Estado / Ubicación en Kanban */}
+                    <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-2">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] text-slate-400 uppercase font-semibold flex items-center justify-between">
+                          <span>Etapa en Pipeline Kanban</span>
+                          {isChangingStatus && <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />}
+                        </label>
+                        <select
+                          value={lead.status}
+                          disabled={isChangingStatus}
+                          onChange={(e) => handleStatusChange(e.target.value as LeadStatus)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-semibold focus:outline-none focus:border-indigo-500 disabled:opacity-50 cursor-pointer"
+                        >
+                          <option value="Nuevo">Nuevo</option>
+                          <option value="Contactado">Contactado</option>
+                          <option value="Diagnóstico">Diagnóstico</option>
+                          <option value="Demo">Demo</option>
+                          <option value="Feedback Demo">Feedback Demo</option>
+                          <option value="Propuesta">Propuesta</option>
+                          <option value="Negociación">Negociación</option>
+                          <option value="Aprobado">Aprobado</option>
+                          <option value="Convertido">Convertido</option>
+                          <option value="Cerrado-Perdido">Cerrado-Perdido</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Datos de la Empresa */}
+                    <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-2.5">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                          <Building2 className="w-3.5 h-3.5 text-indigo-400" /> Empresa
+                        </span>
+                        <span className="text-white font-bold">{lead.company_name}</span>
+                      </div>
+
+                      {lead.legal_name && (
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span>Razón Social:</span>
+                          <span className="text-slate-200">{lead.legal_name}</span>
+                        </div>
+                      )}
+
+                      {lead.tax_id && (
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span>RUC / Cédula:</span>
+                          <span className="text-slate-200 font-mono">{lead.tax_id}</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Nicho Empresarial:</span>
+                        <span className="text-slate-200 font-semibold">{lead.niche || 'No especificado'}</span>
+                      </div>
+
+                      {lead.city && (
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-indigo-400" /> Ubicación:
+                          </span>
+                          <span className="text-slate-200">{lead.city}{lead.province ? `, ${lead.province}` : ''}</span>
+                        </div>
+                      )}
+
+                      {lead.website && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 flex items-center gap-1">
+                            <Globe className="w-3.5 h-3.5 text-indigo-400" /> Web:
+                          </span>
+                          <a href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline flex items-center gap-1">
+                            {lead.website.replace(/^https?:\/\//, '')}
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Contacto Directo */}
+                    <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-2.5">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                          <User className="w-3.5 h-3.5 text-indigo-400" /> Contacto Principal
+                        </span>
+                        <span className="text-white font-bold">{lead.contact_name}</span>
+                      </div>
+
+                      {lead.contact_role && (
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span>Cargo / Rol:</span>
+                          <span className="text-slate-200">{lead.contact_role}</span>
+                        </div>
+                      )}
+
+                      {lead.phone && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-indigo-400" /> Teléfono:
+                          </span>
+                          <a href={`tel:${lead.phone}`} className="text-indigo-400 hover:underline font-mono">
+                            {lead.phone}
+                          </a>
+                        </div>
+                      )}
+
+                      {lead.phone && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 flex items-center gap-1.5">
+                            <MessageCircle className="w-3.5 h-3.5 text-emerald-400" /> WhatsApp Directo:
+                          </span>
+                          <a 
+                            href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-emerald-400 hover:underline font-mono flex items-center gap-1"
+                          >
+                            {lead.phone}
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      )}
+
+                      {lead.email && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 flex items-center gap-1.5">
+                            <Mail className="w-3.5 h-3.5 text-indigo-400" /> Correo:
+                          </span>
+                          <a href={`mailto:${lead.email}`} className="text-indigo-400 hover:underline truncate max-w-[200px]">
+                            {lead.email}
+                          </a>
+                        </div>
+                      )}
+
+                      {lead.contact_preference && (
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span>Preferencia de Contacto:</span>
+                          <span className="text-slate-300 font-medium">{lead.contact_preference}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Diagnóstico & Requerimiento de Software */}
+                    <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-2.5">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                          <Laptop className="w-3.5 h-3.5 text-indigo-400" /> Solución Prevista
+                        </span>
+                        <span className="text-indigo-300 font-bold">{lead.software_type}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Método Actual:</span>
+                        <span className="text-slate-300">{lead.current_management_method || 'Excel'}</span>
+                      </div>
+
+                      {lead.team_size && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">Tamaño Equipo:</span>
+                          <span className="text-slate-300">{lead.team_size}</span>
+                        </div>
+                      )}
+
+                      {lead.reference_budget && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">Presupuesto Referencial:</span>
+                          <span className="text-emerald-400 font-semibold">{lead.reference_budget}</span>
+                        </div>
+                      )}
+
+                      {lead.main_need && (
+                        <div className="pt-2 border-t border-slate-800/80">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
+                            Necesidad Principal:
+                          </span>
+                          <p className="text-slate-200">{lead.main_need}</p>
+                        </div>
+                      )}
+
+                      {lead.problem_description && (
+                        <div className="pt-2 border-t border-slate-800/80">
+                          <span className="text-[10px] uppercase font-bold text-rose-400 tracking-wider block mb-1">
+                            Dolor / Cuello de Botella:
+                          </span>
+                          <p className="text-slate-300 leading-relaxed text-xs">{lead.problem_description}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Próxima Acción Comercial & Asignación */}
+                    <div className="p-4 bg-indigo-950/20 border border-indigo-500/30 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider flex items-center gap-1.5">
+                          <Clock className="w-3 h-3" /> Próximo Paso Comercial
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          Asesor: <strong className="text-white">{lead.assigned_to}</strong>
+                        </span>
+                      </div>
+                      <p className="text-slate-200 font-medium text-xs leading-relaxed">
+                        {lead.next_action || 'Contactar para agendar diagnóstico gratuito'}
+                      </p>
+                      {lead.next_followup_date && (
+                        <div className="text-[11px] text-indigo-300 flex items-center gap-1.5 mt-1 pt-2 border-t border-indigo-500/20">
+                          <span>Fecha programada:</span>
+                          <strong>{format(parseISO(lead.next_followup_date), "d 'de' MMMM, HH:mm 'hrs'", { locale: es })}</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

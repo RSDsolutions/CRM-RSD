@@ -16,7 +16,8 @@ import {
   ArrowRight,
   X,
   Command as CommandIcon,
-  Sparkles
+  Sparkles,
+  Users2
 } from 'lucide-react';
 
 interface CommandItem {
@@ -36,6 +37,14 @@ const COMMAND_ITEMS: CommandItem[] = [
     href: '/',
     icon: KanbanSquare,
     keywords: ['leads', 'kanban', 'pipeline', 'prospectos', 'ventas'],
+  },
+  {
+    id: 'leads',
+    title: 'Directorio de Leads & Prospectos',
+    category: 'Navegación',
+    href: '/leads',
+    icon: Users2,
+    keywords: ['leads', 'prospectos', 'directorio', 'tabla', 'lista', 'comercial'],
   },
   {
     id: 'agenda',

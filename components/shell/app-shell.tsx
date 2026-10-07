@@ -29,7 +29,8 @@ import {
   UserCircle2,
   Layers,
   ChevronDown,
-  Sparkles
+  Sparkles,
+  Users2
 } from 'lucide-react';
 
 interface NavItem {
@@ -49,6 +50,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Comercial',
     items: [
       { label: 'Pipeline (Kanban)', href: '/', icon: KanbanSquare },
+      { label: 'Directorio de Leads', href: '/leads', icon: Users2 },
       { label: 'Agenda & Citas', href: '/agenda', icon: Calendar },
       { label: 'Demos & Tokens IA', href: '/comercial/demos', icon: Monitor },
       { label: 'Propuestas', href: '/comercial/propuestas', icon: FileText },
@@ -172,6 +174,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Compute dynamic breadcrumbs
   const getBreadcrumbs = () => {
     if (pathname === '/') return ['Comercial', 'Pipeline Kanban'];
+    if (pathname.startsWith('/leads')) return ['Comercial', 'Directorio de Leads'];
     if (pathname === '/nuevo-lead') return ['Comercial', 'Nuevo Lead'];
     if (pathname.startsWith('/agenda')) return ['Comercial', 'Agenda'];
     if (pathname.startsWith('/comercial/demos')) return ['Comercial', 'Demos'];

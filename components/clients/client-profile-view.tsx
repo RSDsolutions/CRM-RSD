@@ -299,16 +299,24 @@ export function ClientProfileView({
 
           {/* Sidebar: contactos y metadata */}
           <div className="space-y-4">
-            {/* Lead de origen */}
+            {/* Lead de origen & Historial Comercial */}
             {currentClient.lead_id && (
-              <div className="bg-slate-900 border border-slate-800/80 rounded-2xl p-4">
-                <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Lead de origen</p>
-                <Link
-                  href={`/?lead=${currentClient.lead_id}`}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 font-medium"
-                >
-                  Ver lead en Kanban →
-                </Link>
+              <div className="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 space-y-2">
+                <p className="text-[10px] uppercase tracking-widest text-slate-500">Historial Comercial</p>
+                <div className="flex flex-col gap-1.5">
+                  <Link
+                    href={`/leads?search=${encodeURIComponent(currentClient.company_name)}`}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 font-medium"
+                  >
+                    Ver en Directorio de Leads →
+                  </Link>
+                  <Link
+                    href={`/?lead=${currentClient.lead_id}`}
+                    className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5"
+                  >
+                    Ver en Pipeline Kanban →
+                  </Link>
+                </div>
               </div>
             )}
 
