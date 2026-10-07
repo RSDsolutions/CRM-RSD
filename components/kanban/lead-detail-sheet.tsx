@@ -30,7 +30,8 @@ import {
   MessageSquare,
   Tag,
   UserX,
-  Dna
+  Dna,
+  Wand2
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -104,9 +105,36 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
         lead_id: leadId,
         business_name: lead?.company_name || '',
         industry_niche: typeof lead?.niche === 'string' ? lead.niche : '',
+        identified_pain_points: lead?.problem_description || lead?.main_need || '',
+        current_tools: lead?.current_management_method || '',
       });
     }
     setLoadingDna(false);
+  };
+
+  const generateAIContext = () => {
+    if (!dna) return;
+    const prompt = `🎯 CONTEXTO DEL CLIENTE (DNA):
+- Nombre del Negocio: ${dna.business_name || lead?.company_name || 'No especificado'}
+- Nicho / Industria: ${dna.industry_niche || lead?.niche || 'No especificado'}
+- Tamaño de Equipo: ${lead?.team_size || 'No especificado'}
+
+📋 RESUMEN DEL NEGOCIO:
+${dna.business_overview || 'No especificado'}
+
+⚠️ DOLORES Y PROBLEMAS PRINCIPALES:
+${dna.identified_pain_points || lead?.problem_description || lead?.main_need || 'No especificado'}
+
+🛠️ HERRAMIENTAS ACTUALES Y FLUJO:
+- Herramientas Actuales: ${dna.current_tools || lead?.current_management_method || 'No especificado'}
+- Flujo Operativo Actual: ${dna.operational_flow || 'No especificado'}
+
+✨ SOLUCIÓN ESPERADA:
+- Tipo de Software: ${lead?.software_type || 'No especificado'}
+- Módulos Deseados: ${dna.desired_modules || 'No especificado'}
+- Presupuesto Referencial: ${lead?.reference_budget || 'No especificado'}`;
+
+    setDna(prev => prev ? { ...prev, consolidated_context: prompt } : null);
   };
 
   const loadActivities = async (leadId: string) => {
@@ -695,6 +723,28 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
                         onChange={e => setDna(prev => prev ? { ...prev, operational_flow: e.target.value } : null)}
                         className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
                         placeholder="El cliente escribe por WhatsApp, el vendedor anota en Excel, luego pasan la orden a bodega..."
+                      />
+                    </div>
+
+                    <div className="pt-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-emerald-400 font-bold flex items-center gap-1.5">
+                          <Wand2 className="w-3.5 h-3.5" /> Contexto Estructurado (Prompt IA)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={generateAIContext}
+                          className="text-[10px] px-2 py-1 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 rounded border border-emerald-500/30 transition-colors"
+                        >
+                          Generar desde Campos
+                        </button>
+                      </div>
+                      <textarea
+                        rows={8}
+                        value={dna?.consolidated_context || ''}
+                        onChange={e => setDna(prev => prev ? { ...prev, consolidated_context: e.target.value } : null)}
+                        className="w-full bg-slate-950 border border-emerald-500/30 focus:border-emerald-500 rounded-lg p-3 text-white font-mono text-[11px] leading-relaxed"
+                        placeholder="Aquí se generará el texto optimizado para darle contexto a ChatGPT u otra IA..."
                       />
                     </div>
 
