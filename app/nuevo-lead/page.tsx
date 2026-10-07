@@ -238,71 +238,96 @@ export default function NuevoLeadPage() {
           </div>
         )}
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-          {/* Header del formulario */}
-          <div className="border-b border-slate-800 px-6 py-5 bg-gradient-to-r from-slate-900 to-indigo-950/40">
-            <h1 className="text-xl font-bold text-white flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-indigo-400" />
-              Nuevo Prospecto Comercial
-            </h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Registro centralizado de leads de Meta Ads, referencias y canales directos para seguimiento continuo.
-            </p>
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden">
+          {/* Header del onboarding comercial */}
+          <div className="border-b border-slate-800 px-6 sm:px-8 py-6 bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 px-2.5 py-0.5 rounded-full border border-indigo-500/20">
+                  Onboarding Comercial de Prospectos
+                </span>
+                <h1 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2 mt-1 tracking-tight">
+                  <Building2 className="w-5 h-5 text-indigo-400" />
+                  Registro de Nuevo Prospecto
+                </h1>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Captura datos comerciales, califica necesidades de software y agenda el diagnóstico inicial.
+                </p>
+              </div>
+
+              {/* Porcentaje de progreso */}
+              <div className="flex items-center gap-3 bg-slate-950/60 border border-slate-800 px-3.5 py-1.5 rounded-xl self-start sm:self-auto">
+                <span className="text-[11px] text-slate-400 font-medium">Progreso</span>
+                <span className="text-xs font-bold text-indigo-300 font-mono">
+                  {activeTab === 'empresa' ? '25%' : activeTab === 'contacto' ? '50%' : activeTab === 'necesidad' ? '75%' : '100%'}
+                </span>
+              </div>
+            </div>
+
+            {/* Stepper Visual Bar */}
+            <div className="mt-6 pt-2">
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { id: 'empresa', step: 1, label: 'Empresa', icon: Building2 },
+                  { id: 'contacto', step: 2, label: 'Contacto', icon: User },
+                  { id: 'necesidad', step: 3, label: 'Necesidad', icon: Briefcase },
+                  { id: 'comercial', step: 4, label: 'Comercial', icon: Clock },
+                ].map((s) => {
+                  const Icon = s.icon;
+                  const isCurrent = activeTab === s.id;
+                  const isCompleted = 
+                    (s.step === 1 && (activeTab === 'contacto' || activeTab === 'necesidad' || activeTab === 'comercial')) ||
+                    (s.step === 2 && (activeTab === 'necesidad' || activeTab === 'comercial')) ||
+                    (s.step === 3 && activeTab === 'comercial');
+
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setActiveTab(s.id as any)}
+                      className="group flex flex-col items-center sm:items-start text-left text-xs transition-all"
+                    >
+                      <div className="flex items-center gap-2 w-full mb-1.5">
+                        <div
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs transition-colors ${
+                            isCurrent
+                              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400/40'
+                              : isCompleted
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : 'bg-slate-800 text-slate-500 border border-slate-700'
+                          }`}
+                        >
+                          {isCompleted ? '✓' : s.step}
+                        </div>
+                        <span
+                          className={`hidden sm:inline font-semibold truncate ${
+                            isCurrent
+                              ? 'text-white'
+                              : isCompleted
+                              ? 'text-slate-300'
+                              : 'text-slate-500'
+                          }`}
+                        >
+                          {s.label}
+                        </span>
+                      </div>
+                      <div
+                        className={`w-full h-1 rounded-full transition-colors ${
+                          isCurrent
+                            ? 'bg-indigo-500'
+                            : isCompleted
+                            ? 'bg-emerald-500'
+                            : 'bg-slate-800'
+                        }`}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
-          {/* Navegación por pestañas */}
-          <div className="flex border-b border-slate-800 bg-slate-950/60 overflow-x-auto">
-            <button
-              type="button"
-              onClick={() => setActiveTab('empresa')}
-              className={`flex items-center gap-2 px-5 py-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'empresa'
-                  ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Building2 className="w-4 h-4" />
-              1. Datos de Empresa
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('contacto')}
-              className={`flex items-center gap-2 px-5 py-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'contacto'
-                  ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <User className="w-4 h-4" />
-              2. Contacto
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('necesidad')}
-              className={`flex items-center gap-2 px-5 py-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'necesidad'
-                  ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Briefcase className="w-4 h-4" />
-              3. Situación y Necesidad
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('comercial')}
-              className={`flex items-center gap-2 px-5 py-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'comercial'
-                  ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Clock className="w-4 h-4" />
-              4. Gestión Comercial
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
+          <form onSubmit={handleSubmit(onSubmit)} className="p-6 sm:p-8 space-y-6">
             
             {/* PESTAÑA 1: DATOS DE LA EMPRESA */}
             {activeTab === 'empresa' && (

@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { Navbar } from '@/components/navbar';
+import { AppShell } from '@/components/shell/app-shell';
 
 export const metadata: Metadata = {
-  title: 'RSD Solutions | Mini-CRM & Lead Management',
-  description: 'Sistema interno de gestión y prospección de leads para RSD Solutions',
+  title: 'RSD Solutions | CRM B2B & Prospección Inteligente',
+  description: 'Sistema integral de gestión comercial, prospección de leads, diagnósticos y producción técnica para RSD Solutions',
 };
 
 export default function RootLayout({
@@ -15,10 +15,9 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark">
       <body className="min-h-screen bg-slate-950 text-slate-100 antialiased flex flex-col">
-        <Navbar />
-        <div className="flex-1 flex flex-col">
+        <AppShell>
           {children}
-        </div>
+        </AppShell>
       </body>
     </html>
   );
