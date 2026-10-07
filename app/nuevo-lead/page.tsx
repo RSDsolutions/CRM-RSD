@@ -26,11 +26,12 @@ import {
   DollarSign,
   Users2,
   Clock,
-  Sparkles
+  Sparkles,
+  Lock
 } from 'lucide-react';
 import Link from 'next/link';
 import { BUSINESS_NICHES, BusinessNiche, SoftwareType } from '@/types/database.types';
-import { checkLeadDuplicatesAction, createEnrichedLeadAction, getComercialAdvisorsAction, DuplicateCheckResult } from '@/app/actions/leads';
+import { checkLeadDuplicatesAction, createEnrichedLeadAction, getCurrentUserAdvisorAction, DuplicateCheckResult } from '@/app/actions/leads';
 
 const leadSchema = z.object({
   company_name: z.string().min(2, 'El nombre comercial de la empresa es obligatorio'),
@@ -91,22 +92,14 @@ export default function NuevoLeadPage() {
   const [duplicateWarning, setDuplicateWarning] = useState<DuplicateCheckResult | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
-  const [advisors, setAdvisors] = useState<string[]>(['Robinson Solórzano']);
-
-  useEffect(() => {
-    async function loadAdvisors() {
-      const res = await getComercialAdvisorsAction();
-      if (res.success && res.advisors && res.advisors.length > 0) {
-        setAdvisors(res.advisors);
-      }
-    }
-    loadAdvisors();
-  }, []);
+  const [currentAdvisor, setCurrentAdvisor] = useState<string>('Robinson Solórzano');
+  const [loadingAdvisor, setLoadingAdvisor] = useState<boolean>(true);
 
   const {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<LeadFormData>({
     resolver: zodResolver(leadSchema),
@@ -141,6 +134,19 @@ export default function NuevoLeadPage() {
       appointment_date: '',
     },
   });
+
+  useEffect(() => {
+    async function loadAdvisor() {
+      setLoadingAdvisor(true);
+      const res = await getCurrentUserAdvisorAction();
+      if (res.success && res.name) {
+        setCurrentAdvisor(res.name);
+        setValue('assigned_to', res.name);
+      }
+      setLoadingAdvisor(false);
+    }
+    loadAdvisor();
+  }, [setValue]);
 
   const appointmentScheduled = watch('appointment_scheduled');
   const phoneValue = watch('phone');
@@ -718,17 +724,32 @@ export default function NuevoLeadPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Asesor Responsable <span className="text-rose-500">*</span>
+                    <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        Asesor Responsable <span className="text-rose-500">*</span>
+                      </span>
+                      <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1">
+                        <Lock className="w-3 h-3" /> Asignación Automática
+                      </span>
                     </label>
-                    <select
-                      {...register('assigned_to')}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    >
-                      {advisors.map(adv => (
-                        <option key={adv} value={adv}>{adv}</option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        {...register('assigned_to')}
+                        readOnly
+                        placeholder={loadingAdvisor ? 'Identificando asesor activo...' : 'Asesor responsable'}
+                        className="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 font-semibold cursor-not-allowed select-none focus:outline-none focus:ring-0 shadow-inner"
+                      />
+                      <div className="absolute right-3.5 top-2.5 flex items-center gap-1.5 text-slate-400">
+                        <Lock className="w-3.5 h-3.5 text-indigo-400" />
+                        <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">
+                          Bloqueado
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      El prospecto queda registrado automáticamente bajo tu usuario.
+                    </p>
                   </div>
                 </div>
 

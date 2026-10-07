@@ -16,7 +16,7 @@ export interface DuplicateCheckResult {
 }
 
 /**
- * Obtiene la lista de asesores comerciales y administradores.
+ * Obtiene la lista única de asesores comerciales y administradores (sin duplicados).
  */
 export async function getComercialAdvisorsAction() {
   const supabase = createClient();
@@ -30,7 +30,33 @@ export async function getComercialAdvisorsAction() {
     return { success: false, error: error.message };
   }
 
-  return { success: true, advisors: data.map(d => d.full_name) as string[] };
+  // Deduplicar nombres ignorando espacios y valores nulos
+  const uniqueAdvisors = Array.from(
+    new Set(data.map(d => d.full_name?.trim()).filter(Boolean))
+  ) as string[];
+
+  return { success: true, advisors: uniqueAdvisors };
+}
+
+/**
+ * Obtiene el nombre del asesor comercial o usuario actualmente autenticado.
+ */
+export async function getCurrentUserAdvisorAction() {
+  const supabase = createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { success: false, name: 'Robinson Solórzano', email: null };
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, email')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  const name = profile?.full_name?.trim() || user.email?.split('@')[0] || 'Robinson Solórzano';
+  return { success: true, name, email: user.email, userId: user.id };
 }
 
 /**
