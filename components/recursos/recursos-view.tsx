@@ -7,14 +7,14 @@ import { FileText, Upload, Trash2, Download, AlertCircle, Loader2, CheckCircle2,
 import { uploadResourceAction, getResourcesAction, deleteResourceAction } from '@/app/actions/resources';
 
 const KIT_ITEMS = [
-  { id: '01', title: 'Atención', subtitle: 'Guiones y Atención Comercial', expectedMatch: 'Guiones y Atención Comercial' },
-  { id: '02', title: 'Calificación', subtitle: 'Guía de Calificación de Prospectos', expectedMatch: 'Guía de Calificación de Prospectos' },
-  { id: '03', title: 'Objeciones', subtitle: 'Guía de Manejo de Objeciones', expectedMatch: 'Guía de Manejo de Objeciones' },
-  { id: '04', title: 'Seguimiento', subtitle: 'Proceso de Seguimiento Comercial', expectedMatch: 'Proceso de Seguimiento Comercial' },
-  { id: '05', title: 'Diagnóstico', subtitle: 'Guía para Reunión de Diagnóstico', expectedMatch: 'Guía para Reunión de Diagnóstico' },
-  { id: '06', title: 'Demo', subtitle: 'Guía de Presentación de Demos', expectedMatch: 'Guía de Presentación de Demos' },
-  { id: '07', title: 'CRM', subtitle: 'Manual de Uso del CRM Grow Level', expectedMatch: 'Manual de Uso del CRM Grow Level' },
-  { id: '08', title: 'Reactivación', subtitle: 'Manual de Prospección y Reactivación de Leads', expectedMatch: 'Manual de Prospección y Reactivación de Leads' },
+  { id: '01', title: 'Atención', subtitle: 'Guiones y Atención Comercial', expectedMatch: 'Guiones y Atenci' },
+  { id: '02', title: 'Calificación', subtitle: 'Guía de Calificación de Prospectos', expectedMatch: 'Calificaci' },
+  { id: '03', title: 'Objeciones', subtitle: 'Guía de Manejo de Objeciones', expectedMatch: 'Manejo de Objeciones' },
+  { id: '04', title: 'Seguimiento', subtitle: 'Proceso de Seguimiento Comercial', expectedMatch: 'Seguimiento Comercial' },
+  { id: '05', title: 'Diagnóstico', subtitle: 'Guía para Reunión de Diagnóstico', expectedMatch: 'Diagn' },
+  { id: '06', title: 'Demo', subtitle: 'Guía de Presentación de Demos', expectedMatch: 'Demos' },
+  { id: '07', title: 'CRM', subtitle: 'Manual de Uso del CRM Grow Level', expectedMatch: 'Grow Level' },
+  { id: '08', title: 'Reactivación', subtitle: 'Manual de Prospección y Reactivación de Leads', expectedMatch: 'Reactivaci' },
 ];
 
 export function RecursosView({ role }: { role: string }) {
@@ -109,9 +109,13 @@ export function RecursosView({ role }: { role: string }) {
 
   const isAdminOrRobinson = role === 'admin' || role === 'robinson';
 
+  // Helper para normalizar texto (quitar tildes y mayúsculas)
+  const normalize = (text: string) => 
+    text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
   // Clasificar recursos
   const kitItemsMatched = KIT_ITEMS.map(item => {
-    const found = resources.find(r => r.title.toLowerCase().includes(item.expectedMatch.toLowerCase()));
+    const found = resources.find(r => normalize(r.title).includes(normalize(item.expectedMatch)));
     return { ...item, resource: found };
   });
 
