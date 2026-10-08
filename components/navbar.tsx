@@ -18,7 +18,8 @@ import {
   ChevronDown,
   Activity,
   Calendar,
-  CheckSquare
+  CheckSquare,
+  Library
 } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import { User } from '@supabase/supabase-js';
@@ -108,6 +109,11 @@ export function Navbar() {
       label: 'Proyectos',
       icon: <FolderKanban className="w-4 h-4" />,
       href: '/proyectos',
+    },
+    {
+      label: 'Recursos',
+      icon: <Library className="w-4 h-4" />,
+      href: '/recursos',
     },
     {
       label: 'Dirección',

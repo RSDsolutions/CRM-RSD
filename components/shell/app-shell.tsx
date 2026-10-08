@@ -30,7 +30,8 @@ import {
   Layers,
   ChevronDown,
   Sparkles,
-  Users2
+  Users2,
+  Library
 } from 'lucide-react';
 
 interface NavItem {
@@ -72,6 +73,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Operaciones',
     items: [
       { label: 'Tareas & Seguimiento', href: '/tareas', icon: CheckSquare },
+      { label: 'Recursos', href: '/recursos', icon: Library },
     ],
   },
   {
