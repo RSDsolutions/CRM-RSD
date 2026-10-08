@@ -33,23 +33,46 @@ export function RecursosView({ role }: { role: string }) {
     setIsUploading(true);
 
     const formData = new FormData(e.currentTarget);
-    const file = formData.get('file') as File;
+    const files = formData.getAll('file') as File[];
+    const description = formData.get('description') as string;
     
-    if (file && file.type !== 'application/pdf') {
-      setError('Solo se permiten archivos PDF.');
+    const validFiles = files.filter(f => f.size > 0);
+
+    if (validFiles.length === 0) {
+      setError('Selecciona al menos un archivo.');
       setIsUploading(false);
       return;
     }
 
-    const { error: uploadError } = await uploadResourceAction(formData);
+    let hasErrors = false;
 
-    if (uploadError) {
-      setError(uploadError);
-    } else {
+    for (const file of validFiles) {
+      if (file.type !== 'application/pdf') {
+        setError(`El archivo ${file.name} no es un PDF válido.`);
+        hasErrors = true;
+        break;
+      }
+
+      const singleFormData = new FormData();
+      singleFormData.append('file', file);
+      if (description) {
+        singleFormData.append('description', description);
+      }
+
+      const { error: uploadError } = await uploadResourceAction(singleFormData);
+
+      if (uploadError) {
+        setError(`Error subiendo ${file.name}: ${uploadError}`);
+        hasErrors = true;
+        break;
+      }
+    }
+
+    if (!hasErrors) {
       e.currentTarget.reset();
-      await loadResources();
     }
     
+    await loadResources();
     setIsUploading(false);
   }
 
@@ -108,6 +131,7 @@ export function RecursosView({ role }: { role: string }) {
                     id="file"
                     name="file"
                     accept=".pdf"
+                    multiple
                     required
                     className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
                   />
