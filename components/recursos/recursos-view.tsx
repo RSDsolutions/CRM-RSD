@@ -100,18 +100,7 @@ export function RecursosView({ role }: { role: string }) {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleUpload} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label htmlFor="title" className="text-sm font-medium text-slate-300">Título</label>
-                  <input
-                    type="text"
-                    id="title"
-                    name="title"
-                    required
-                    className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ej. Guía de Ventas 2026"
-                  />
-                </div>
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <label htmlFor="file" className="text-sm font-medium text-slate-300">Archivo PDF</label>
                   <input

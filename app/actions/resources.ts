@@ -6,11 +6,15 @@ import { revalidatePath } from 'next/cache';
 export async function uploadResourceAction(formData: FormData) {
   const supabase = createClient();
   const file = formData.get('file') as File;
-  const title = formData.get('title') as string;
+  let title = formData.get('title') as string;
   const description = formData.get('description') as string;
 
-  if (!file || !title) {
-    return { error: 'El archivo y el título son obligatorios.' };
+  if (!file) {
+    return { error: 'El archivo es obligatorio.' };
+  }
+
+  if (!title) {
+    title = file.name.replace(/\.pdf$/i, '');
   }
 
   // Get current user profile for uploaded_by
@@ -72,8 +76,7 @@ export async function getResourcesAction() {
     .select(`
       *,
       profiles:uploaded_by (
-        first_name,
-        last_name,
+        full_name,
         email
       )
     `)
