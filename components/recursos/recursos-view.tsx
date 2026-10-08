@@ -3,18 +3,110 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { FileText, Upload, Trash2, Download, AlertCircle, Loader2, CheckCircle2, Lock } from 'lucide-react';
+import { FileText, Upload, Trash2, Download, AlertCircle, Loader2, CheckCircle2, Lock, FolderOpen } from 'lucide-react';
 import { uploadResourceAction, getResourcesAction, deleteResourceAction } from '@/app/actions/resources';
 
-const KIT_ITEMS = [
-  { id: '01', title: 'Atención', subtitle: 'Guiones y Atención Comercial', expectedMatch: 'Guiones y Atenci' },
-  { id: '02', title: 'Calificación', subtitle: 'Guía de Calificación de Prospectos', expectedMatch: 'Calificaci' },
-  { id: '03', title: 'Objeciones', subtitle: 'Guía de Manejo de Objeciones', expectedMatch: 'Manejo de Objeciones' },
-  { id: '04', title: 'Seguimiento', subtitle: 'Proceso de Seguimiento Comercial', expectedMatch: 'Seguimiento Comercial' },
-  { id: '05', title: 'Diagnóstico', subtitle: 'Guía para Reunión de Diagnóstico', expectedMatch: 'Diagn' },
-  { id: '06', title: 'Demo', subtitle: 'Guía de Presentación de Demos', expectedMatch: 'Demos' },
-  { id: '07', title: 'CRM', subtitle: 'Manual de Uso del CRM Grow Level', expectedMatch: 'Grow Level' },
-  { id: '08', title: 'Reactivación', subtitle: 'Manual de Prospección y Reactivación de Leads', expectedMatch: 'Reactivaci' },
+const RESOURCE_KITS = [
+  {
+    id: '01',
+    title: 'Identidad y Presentación Corporativa',
+    items: [
+      { id: '#1', title: 'Ficha Institucional', expectedMatch: 'Ficha Institucional' },
+      { id: '#2', title: 'Presentación Corporativa', expectedMatch: 'Presentaci' },
+    ]
+  },
+  {
+    id: '02',
+    title: 'Kit Comercial del Asesor',
+    items: [
+      { id: '#4', title: 'Guiones y Atención Comercial', expectedMatch: 'Guiones' },
+      { id: '#5', title: 'Calificación de Prospectos', expectedMatch: 'Calificaci' },
+      { id: '#6', title: 'Manejo de Objeciones', expectedMatch: 'Objeciones' },
+      { id: '#7', title: 'Seguimiento Comercial', expectedMatch: 'Seguimiento' },
+      { id: '#8', title: 'Reunión de Diagnóstico', expectedMatch: 'Diagn' },
+      { id: '#22', title: 'CRM Grow Level', expectedMatch: 'Grow Level' },
+      { id: '#24', title: 'Prospección y Reactivación', expectedMatch: 'Reactivaci' },
+      { id: '#25', title: 'Presentación de Demos', expectedMatch: 'Demos' },
+    ]
+  },
+  {
+    id: '03',
+    title: 'Kit de Propuestas y Cierre',
+    items: [
+      { id: '#9', title: 'Política de Demos', expectedMatch: 'Pol' },
+      { id: '#10', title: 'Propuestas Comerciales', expectedMatch: 'Propuestas' },
+      { id: '#11', title: 'Plantillas de Propuestas', expectedMatch: 'Plantillas' },
+      { id: '#26', title: 'Informe de Diagnóstico', expectedMatch: 'Informe' },
+      { id: '#27', title: 'Análisis de Viabilidad', expectedMatch: 'Viabilidad' },
+    ]
+  },
+  {
+    id: '04',
+    title: 'Kit de Levantamiento y Proyecto',
+    items: [
+      { id: '#12', title: 'Requerimientos y Alcance', expectedMatch: 'Requerimientos' },
+      { id: '#13', title: 'Aprobación e Inicio', expectedMatch: 'Aprobaci' },
+      { id: '#28', title: 'Cambios de Alcance', expectedMatch: 'Cambios' },
+    ]
+  },
+  {
+    id: '05',
+    title: 'Kit de Entrega y Experiencia',
+    items: [
+      { id: '#14', title: 'Acta de Entrega', expectedMatch: 'Acta' },
+      { id: '#15', title: 'Control de Calidad', expectedMatch: 'Control de Calidad' },
+      { id: '#16', title: 'Manual del Cliente', expectedMatch: 'Manual del Cliente' },
+      { id: '#18', title: 'Satisfacción y Testimonio', expectedMatch: 'Testimonio' },
+    ]
+  },
+  {
+    id: '06',
+    title: 'Kit de Soporte y Postventa',
+    items: [
+      { id: '#17', title: 'Soporte e Incidencias', expectedMatch: 'Soporte' },
+      { id: '#19', title: 'Registro de Incidencias', expectedMatch: 'Registro de Incidencias' },
+      { id: '#33', title: 'Retención y Renovación', expectedMatch: 'Renovaci' },
+    ]
+  },
+  {
+    id: '07',
+    title: 'Kit de Crecimiento y Referidos',
+    items: [
+      { id: '#34', title: 'Referidos', expectedMatch: 'Referidos' },
+      { id: '#35', title: 'Alianzas y Partners', expectedMatch: 'Alianzas' },
+    ]
+  },
+  {
+    id: '08',
+    title: 'Kit de Recuperación Comercial',
+    items: [
+      { id: '#36', title: 'Oportunidades Perdidas', expectedMatch: 'Perdidas' },
+    ]
+  },
+  {
+    id: '09',
+    title: 'Kit de Gestión Comercial',
+    items: [
+      { id: '#21', title: 'Indicadores', expectedMatch: 'Indicadores' },
+      { id: '#30', title: 'Supervisión y Evaluación', expectedMatch: 'Supervisi' },
+      { id: '#31', title: 'Comisiones e Incentivos', expectedMatch: 'Comisiones' },
+    ]
+  },
+  {
+    id: '10',
+    title: 'Kit de Formación',
+    items: [
+      { id: '#29', title: 'Onboarding de Asesores', expectedMatch: 'Onboarding' },
+    ]
+  },
+  {
+    id: '11',
+    title: 'Kit de Calidad y Gestión Interna',
+    items: [
+      { id: '#20', title: 'Biblioteca Comercial', expectedMatch: 'Biblioteca' },
+      { id: '#32', title: 'Calidad de Datos y Privacidad', expectedMatch: 'Privacidad' },
+    ]
+  }
 ];
 
 export function RecursosView({ role }: { role: string }) {
@@ -109,18 +201,32 @@ export function RecursosView({ role }: { role: string }) {
 
   const isAdminOrRobinson = role === 'admin' || role === 'robinson';
 
-  // Helper para normalizar texto (quitar tildes y mayúsculas)
   const normalize = (text: string) => 
     text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-  // Clasificar recursos
-  const kitItemsMatched = KIT_ITEMS.map(item => {
-    const found = resources.find(r => normalize(r.title).includes(normalize(item.expectedMatch)));
-    return { ...item, resource: found };
+  // Find matches and track used IDs to isolate "other resources"
+  const matchedResourceIds = new Set<string>();
+
+  const mappedKits = RESOURCE_KITS.map(kit => {
+    const mappedItems = kit.items.map(item => {
+      // 1) Match by exact substring ID (e.g., "#4 ")
+      // 2) Or match by our normalized substring
+      const found = resources.find(r => {
+        const titleNorm = normalize(r.title);
+        const matchesId = titleNorm.includes(normalize(item.id) + ' ');
+        const matchesText = titleNorm.includes(normalize(item.expectedMatch));
+        return matchesId || matchesText;
+      });
+
+      if (found) {
+        matchedResourceIds.add(found.id);
+      }
+      return { ...item, resource: found };
+    });
+    return { ...kit, items: mappedItems };
   });
 
-  const matchedResourceIds = kitItemsMatched.map(item => item.resource?.id).filter(Boolean);
-  const otherResources = resources.filter(r => !matchedResourceIds.includes(r.id));
+  const otherResources = resources.filter(r => !matchedResourceIds.has(r.id));
 
   return (
     <div className="space-y-8">
@@ -144,15 +250,15 @@ export function RecursosView({ role }: { role: string }) {
           <CardHeader className="pb-4">
             <CardTitle className="text-lg text-white flex items-center gap-2">
               <Upload className="w-5 h-5 text-blue-400" />
-              Subir Recursos
+              Subir Recursos en Lote
             </CardTitle>
-            <CardDescription className="text-slate-400">Sube PDFs para el Kit Comercial u otros documentos.</CardDescription>
+            <CardDescription className="text-slate-400">Selecciona varios PDFs a la vez. El sistema los asignará automáticamente a su categoría.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleUpload} className="space-y-4">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
-                  <label htmlFor="file" className="text-sm font-medium text-slate-300">Seleccionar Archivo(s) PDF</label>
+                  <label htmlFor="file" className="text-sm font-medium text-slate-300">Archivos PDF</label>
                   <input
                     type="file"
                     id="file"
@@ -171,13 +277,13 @@ export function RecursosView({ role }: { role: string }) {
                   name="description"
                   rows={2}
                   className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Descripción que se aplicará a los archivos subidos en este lote..."
+                  placeholder="Nota interna que aplicará a todos los PDFs en esta subida..."
                 />
               </div>
               <Button type="submit" disabled={isUploading} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
                 {isUploading ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Subiendo archivos...
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando subida...
                   </>
                 ) : (
                   <>
@@ -190,16 +296,15 @@ export function RecursosView({ role }: { role: string }) {
         </Card>
       )}
 
-      {/* Kit Comercial del Asesor */}
+      {/* Main Kits Listing */}
       <div>
         <div className="mb-6 border-b border-slate-800 pb-4">
           <h3 className="text-xl font-bold text-white flex items-center gap-2">
             <span className="bg-gradient-to-r from-blue-500 to-indigo-500 text-transparent bg-clip-text">
-              KIT COMERCIAL DEL ASESOR
+              LIBRERÍA Y KITS DE RSD SOLUTIONS
             </span>
-            <span className="text-sm font-normal text-slate-500 uppercase tracking-widest ml-2">— RSD Solutions</span>
           </h3>
-          <p className="text-slate-400 text-sm mt-1">El paso a paso y las guías maestras de nuestro proceso de ventas.</p>
+          <p className="text-slate-400 text-sm mt-1">Estructura completa de todos nuestros manuales operativos y comerciales.</p>
         </div>
 
         {isLoading ? (
@@ -207,59 +312,66 @@ export function RecursosView({ role }: { role: string }) {
             <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {kitItemsMatched.map((item) => (
-              <div 
-                key={item.id} 
-                className={`relative rounded-xl border p-5 flex flex-col justify-between transition-all duration-300 ${
-                  item.resource 
-                    ? 'bg-slate-900 border-slate-700 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/10' 
-                    : 'bg-slate-900/50 border-slate-800/50 opacity-80'
-                }`}
-              >
-                <div>
-                  <div className="flex justify-between items-start mb-4">
-                    <span className="text-3xl font-black text-slate-800 select-none">{item.id}</span>
-                    {item.resource ? (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                    ) : (
-                      <Lock className="w-4 h-4 text-slate-600" />
-                    )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {mappedKits.map(kit => (
+              <Card key={kit.id} className="bg-slate-900 border-slate-800 shadow-none">
+                <CardHeader className="py-4 border-b border-slate-800/50 bg-slate-800/20">
+                  <CardTitle className="text-base text-white flex items-center gap-2.5">
+                    <span className="bg-blue-500/20 border border-blue-500/30 text-blue-400 px-2 py-0.5 rounded text-xs font-bold font-mono">
+                      {kit.id}
+                    </span>
+                    {kit.title}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y divide-slate-800/50">
+                    {kit.items.map(item => (
+                      <div key={item.id} className="p-3 sm:px-4 flex items-center justify-between hover:bg-slate-800/40 transition-colors group">
+                        <div className="flex items-center gap-3 overflow-hidden pr-2">
+                          {item.resource ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                          ) : (
+                            <Lock className="w-4 h-4 text-slate-600 flex-shrink-0" />
+                          )}
+                          <span className={`text-sm font-medium truncate ${item.resource ? 'text-slate-200' : 'text-slate-500'}`}>
+                            <span className="text-slate-500 mr-1.5 font-mono text-xs">{item.id}</span>
+                            {item.title}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {item.resource ? (
+                            <>
+                              <a
+                                href={item.resource.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded-md transition-colors"
+                                title="Descargar"
+                              >
+                                <Download className="w-4 h-4" />
+                              </a>
+                              {isAdminOrRobinson && (
+                                <button
+                                  onClick={() => handleDelete(item.resource!.id, item.resource!.file_path)}
+                                  className="p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-400 rounded-md transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-[10px] font-semibold tracking-wider uppercase text-slate-600 bg-slate-800 px-2 py-0.5 rounded">
+                              Pendiente
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <h4 className={`text-lg font-bold mb-1 ${item.resource ? 'text-white' : 'text-slate-400'}`}>
-                    {item.title}
-                  </h4>
-                  <p className="text-sm text-slate-500 leading-snug">
-                    {item.subtitle}
-                  </p>
-                </div>
-                
-                <div className="mt-6 pt-4 border-t border-slate-800/50 flex items-center justify-between">
-                  {item.resource ? (
-                    <a
-                      href={item.resource.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-400 hover:text-blue-300 transition-colors"
-                    >
-                      <Download className="w-4 h-4" />
-                      Descargar PDF
-                    </a>
-                  ) : (
-                    <span className="text-sm font-medium text-slate-600">Pendiente...</span>
-                  )}
-                  
-                  {item.resource && isAdminOrRobinson && (
-                    <button
-                      onClick={() => handleDelete(item.resource!.id, item.resource!.file_path)}
-                      className="text-slate-600 hover:text-red-400 transition-colors"
-                      title="Eliminar recurso"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
@@ -269,71 +381,53 @@ export function RecursosView({ role }: { role: string }) {
       {!isLoading && otherResources.length > 0 && (
         <div className="pt-8">
           <div className="mb-6 border-b border-slate-800 pb-4">
-            <h3 className="text-xl font-bold text-white">Otros Recursos Adicionales</h3>
-            <p className="text-slate-400 text-sm mt-1">Documentos, anexos y materiales de apoyo extra.</p>
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <FolderOpen className="w-5 h-5 text-slate-400" />
+              Otros Documentos Sueltos
+            </h3>
+            <p className="text-slate-400 text-sm mt-1">Archivos y anexos que no pertenecen a ningún Kit estructurado.</p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {otherResources.map((resource) => (
-              <Card key={resource.id} className="bg-slate-900 border-slate-800 flex flex-col hover:border-slate-700 transition-colors">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700">
-                        <FileText className="w-5 h-5 text-slate-400" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-white text-base leading-tight line-clamp-2" title={resource.title}>
-                          {resource.title}
-                        </CardTitle>
-                        <CardDescription className="text-slate-500 text-xs mt-1">
-                          {new Date(resource.created_at).toLocaleDateString()}
-                        </CardDescription>
-                      </div>
-                    </div>
+              <div key={resource.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col justify-between hover:border-slate-700 transition-colors">
+                <div>
+                  <div className="flex justify-between items-start mb-2">
+                    <FileText className="w-6 h-6 text-slate-500" />
                     {isAdminOrRobinson && (
                       <button
                         onClick={() => handleDelete(resource.id, resource.file_path)}
-                        className="text-slate-500 hover:text-red-400 transition-colors ml-2 flex-shrink-0"
-                        title="Eliminar recurso"
+                        className="text-slate-600 hover:text-red-400 transition-colors"
+                        title="Eliminar"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
-                </CardHeader>
-                <CardContent className="flex-1 flex flex-col justify-between pt-0">
-                  {resource.description && (
-                    <p className="text-sm text-slate-400 mb-4 line-clamp-2" title={resource.description}>
-                      {resource.description}
-                    </p>
-                  )}
-                  <div className="flex items-center justify-between mt-auto">
-                    <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider bg-slate-800/50 px-2 py-1 rounded">
-                      {formatBytes(resource.file_size_bytes)}
-                    </span>
-                    <a
-                      href={resource.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-white hover:text-blue-400 transition-colors"
-                    >
-                      <Download className="w-4 h-4" />
-                      Descargar
-                    </a>
-                  </div>
-                </CardContent>
-              </Card>
+                  <h4 className="text-sm font-bold text-white line-clamp-2" title={resource.title}>
+                    {resource.title}
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {new Date(resource.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-800/50 flex items-center justify-between">
+                  <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">
+                    {formatBytes(resource.file_size_bytes)}
+                  </span>
+                  <a
+                    href={resource.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Bajar
+                  </a>
+                </div>
+              </div>
             ))}
           </div>
-        </div>
-      )}
-      
-      {!isLoading && resources.length === 0 && kitItemsMatched.every(item => !item.resource) && (
-        <div className="py-12 text-center bg-slate-900 border border-slate-800 rounded-xl mt-6">
-          <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-white mb-1">Aún no hay recursos subidos</h3>
-          <p className="text-slate-400 text-sm">Los documentos del Kit Comercial y extras aparecerán aquí.</p>
         </div>
       )}
     </div>
