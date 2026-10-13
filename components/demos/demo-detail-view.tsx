@@ -350,6 +350,26 @@ export function DemoDetailView({
                 <p className="text-slate-300 mt-0.5">{demo.modules_included}</p>
               </div>
             )}
+            {demo.main_flows && (
+              <div>
+                <span className="text-slate-500 block">Flujos Principales a Demostrar:</span>
+                <p className="text-slate-300 mt-0.5 whitespace-pre-line">{demo.main_flows}</p>
+              </div>
+            )}
+            {demo.target_roles && (
+              <div>
+                <span className="text-slate-500 block">Roles de Usuario:</span>
+                <p className="text-slate-300 mt-0.5">{demo.target_roles}</p>
+              </div>
+            )}
+            {demo.scheduled_at && (
+              <div>
+                <span className="text-slate-500 block">Fecha y Hora Programada:</span>
+                <span className="text-indigo-300 font-medium">
+                  {format(parseISO(demo.scheduled_at), "dd 'de' MMMM yyyy, HH:mm", { locale: es })}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-3">
@@ -358,6 +378,12 @@ export function DemoDetailView({
               <span className="text-slate-500 block">Identidad Visual y Referencias:</span>
               <p className="text-slate-300 mt-0.5">{demo.visual_identity_received || demo.design_references || 'No especificadas'}</p>
             </div>
+            {demo.test_data_used && (
+              <div>
+                <span className="text-slate-500 block">Datos de Prueba / Mocking:</span>
+                <p className="text-slate-300 mt-0.5">{demo.test_data_used}</p>
+              </div>
+            )}
             <div>
               <span className="text-slate-500 block">Criterios de Aceptación:</span>
               <p className="text-slate-300 mt-0.5">{demo.acceptance_criteria || 'Revisión por Robinson y validación de flujos clave'}</p>
@@ -366,6 +392,18 @@ export function DemoDetailView({
               <span className="text-slate-500 block">Limitaciones Conocidas:</span>
               <p className="text-slate-300 mt-0.5">{demo.known_limitations || 'Datos ficticios de prueba'}</p>
             </div>
+            {demo.lead_id && (
+              <div className="pt-2 border-t border-slate-800">
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold mb-1">Lead Asociado</span>
+                <Link
+                  href="/leads"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-xs font-medium border border-indigo-500/30 transition-colors"
+                >
+                  <span>Ver Lead en Tablero Kanban</span>
+                  <ExternalLink className="w-3 h-3" />
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}

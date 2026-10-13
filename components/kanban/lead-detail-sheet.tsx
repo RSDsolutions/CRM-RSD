@@ -47,7 +47,13 @@ import {
   Stethoscope,
   Workflow,
   AlertTriangle,
-  Users
+  Users,
+  Copy,
+  RefreshCw,
+  Monitor,
+  Check,
+  Layers,
+  Palette
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -111,6 +117,7 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
   const [dna, setDna] = useState<Partial<CompanyDNA> | null>(null);
   const [loadingDna, setLoadingDna] = useState(false);
   const [savingDna, setSavingDna] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   useEffect(() => {
     if (lead) {
@@ -144,11 +151,78 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
       });
       loadActivities(lead.id);
       loadTasks(lead.id);
-      loadDna(lead.id);
-      loadDiagnostic(lead.id);
+      loadDiagnosticAndDna(lead);
       loadAdvisors();
     }
   }, [lead]);
+
+  const syncDnaWithLeadAndDiagnostic = (
+    currentDna?: Partial<CompanyDNA> | null,
+    leadObj?: Lead | null,
+    diagObj?: Diagnostic | null
+  ): Partial<CompanyDNA> => {
+    const l = leadObj || lead;
+    const d = diagObj || diagnostic;
+    const cur = currentDna || {};
+
+    return {
+      ...cur,
+      lead_id: l?.id || cur.lead_id,
+      version: cur.version || 1,
+      status: cur.status || 'Preliminar',
+      business_name: cur.business_name || l?.company_name || '',
+      industry_niche: cur.industry_niche || (typeof l?.niche === 'string' ? l.niche : '') || d?.business_activity || '',
+      business_overview: cur.business_overview || d?.business_activity || '',
+      business_model: cur.business_model || d?.business_model || '',
+      products_services: cur.products_services || d?.products_services || '',
+      target_audience: cur.target_audience || '',
+      team_size: cur.team_size || d?.team_size || l?.team_size || '',
+      branches_locations: cur.branches_locations || d?.branches || '',
+      current_tools: cur.current_tools || d?.current_tools || l?.current_management_method || '',
+      digitalization_level: cur.digitalization_level || d?.digitalization_level || 'Bajo',
+      operational_flow: cur.operational_flow || d?.current_workflow || '',
+      identified_pain_points: cur.identified_pain_points || d?.main_problem || l?.problem_description || l?.main_need || '',
+      secondary_pains: cur.secondary_pains || d?.secondary_problems || '',
+      bottlenecks: cur.bottlenecks || d?.bottlenecks || '',
+      risks_losses: cur.risks_losses || d?.risks_losses || '',
+      urgency_priority: cur.urgency_priority || d?.urgency_priority || l?.priority || 'Media',
+      expected_outcome: cur.expected_outcome || d?.expected_outcome || '',
+      desired_modules: cur.desired_modules || d?.potential_modules || '',
+      proposed_solution: cur.proposed_solution || d?.proposed_solution || (l?.software_type ? `Software a medida: ${l.software_type}` : ''),
+      user_roles: cur.user_roles || d?.user_roles || '',
+      required_integrations: cur.required_integrations || d?.required_integrations || '',
+      data_migration_notes: cur.data_migration_notes || d?.data_migration || '',
+      technical_risks: cur.technical_risks || d?.technical_risks || '',
+      visual_identity_notes: cur.visual_identity_notes || d?.internal_notes || '',
+      design_preferences: cur.design_preferences || '',
+      reference_systems: cur.reference_systems || '',
+      constraints_budget: cur.constraints_budget || d?.restrictions || l?.reference_budget || '',
+      reference_budget: cur.reference_budget || l?.reference_budget || '',
+      contact_person: cur.contact_person || l?.contact_name || '',
+      contact_role: cur.contact_role || l?.contact_role || '',
+      contact_phone: cur.contact_phone || l?.phone || '',
+      contact_email: cur.contact_email || l?.email || '',
+      location: cur.location || [l?.city, l?.province].filter(Boolean).join(', ') || '',
+    };
+  };
+
+  const loadDiagnosticAndDna = async (targetLead: Lead) => {
+    setLoadingDiagnostic(true);
+    setLoadingDna(true);
+    try {
+      const [diag, dnaData] = await Promise.all([
+        getLeadDiagnosticAction(targetLead.id),
+        getCompanyDNAAction(targetLead.id),
+      ]);
+      setDiagnostic(diag);
+      setDna(syncDnaWithLeadAndDiagnostic(dnaData, targetLead, diag));
+    } catch (err) {
+      console.error('Error loading diagnostic or dna:', err);
+    } finally {
+      setLoadingDiagnostic(false);
+      setLoadingDna(false);
+    }
+  };
 
   const loadDiagnostic = async (leadId: string) => {
     setLoadingDiagnostic(true);
@@ -164,44 +238,72 @@ export function LeadDetailSheet({ lead, onClose, onLeadUpdated }: LeadDetailShee
     }
   };
 
-  const loadDna = async (leadId: string) => {
-    setLoadingDna(true);
-    const data = await getCompanyDNAAction(leadId);
-    if (data) {
-      setDna(data);
-    } else {
-      setDna({
-        lead_id: leadId,
-        business_name: lead?.company_name || '',
-        industry_niche: typeof lead?.niche === 'string' ? lead.niche : '',
-        identified_pain_points: lead?.problem_description || lead?.main_need || '',
-        current_tools: lead?.current_management_method || '',
-      });
-    }
-    setLoadingDna(false);
+  const handleManualSyncDna = () => {
+    setDna(prev => {
+      const merged = syncDnaWithLeadAndDiagnostic(prev, lead, diagnostic);
+      setStatusMessage({ type: 'success', text: 'DNA sincronizado exitosamente con el Lead y Diagnóstico.' });
+      setTimeout(() => setStatusMessage(null), 3000);
+      return merged;
+    });
+  };
+
+  const handleCopyPrompt = () => {
+    if (!dna?.consolidated_context) return;
+    navigator.clipboard.writeText(dna.consolidated_context);
+    setCopiedPrompt(true);
+    setTimeout(() => setCopiedPrompt(false), 2500);
   };
 
   const generateAIContext = () => {
-    if (!dna) return;
-    const prompt = `🎯 CONTEXTO DEL CLIENTE (DNA):
-- Nombre del Negocio: ${dna.business_name || lead?.company_name || 'No especificado'}
-- Nicho / Industria: ${dna.industry_niche || lead?.niche || 'No especificado'}
-- Tamaño de Equipo: ${lead?.team_size || 'No especificado'}
+    if (!dna && !lead) return;
+    const current = dna || {};
 
-📋 RESUMEN DEL NEGOCIO:
-${dna.business_overview || 'No especificado'}
+    const prompt = `# 🧬 ADN ESTRATÉGICO DEL CLIENTE & DIAGNÓSTICO INTEGRAL (RSD Solutions)
 
-⚠️ DOLORES Y PROBLEMAS PRINCIPALES:
-${dna.identified_pain_points || lead?.problem_description || lead?.main_need || 'No especificado'}
+## 🏢 1. IDENTIFICACIÓN Y CONTEXTO DEL CLIENTE
+- **Nombre Comercial:** ${current.business_name || lead?.company_name || 'No especificado'}
+- **Razón Social / RUC:** ${lead?.legal_name || 'No registrada'}${lead?.tax_id ? ` (RUC/NIT: ${lead.tax_id})` : ''}
+- **Nicho / Industria:** ${current.industry_niche || lead?.niche || 'No especificado'}
+- **Ubicación:** ${current.location || [lead?.city, lead?.province].filter(Boolean).join(', ') || 'No especificada'}
+- **Contacto Principal:** ${current.contact_person || lead?.contact_name || 'No especificado'}${current.contact_role || lead?.contact_role ? ` (${current.contact_role || lead?.contact_role})` : ''}
+- **Teléfono / WhatsApp:** ${current.contact_phone || lead?.phone || 'No especificado'}
+- **Correo Electrónico:** ${current.contact_email || lead?.email || 'No especificado'}
+- **Tamaño de Equipo:** ${current.team_size || lead?.team_size || 'No especificado'}
+- **Sucursales / Sedes:** ${current.branches_locations || '1 sede principal'}
+- **Canales Digitales:** ${[lead?.website ? `Web: ${lead.website}` : null, lead?.social_media ? `Redes: ${lead.social_media}` : null].filter(Boolean).join(' | ') || 'No especificado'}
 
-🛠️ HERRAMIENTAS ACTUALES Y FLUJO:
-- Herramientas Actuales: ${dna.current_tools || lead?.current_management_method || 'No especificado'}
-- Flujo Operativo Actual: ${dna.operational_flow || 'No especificado'}
+## 💼 2. MODELO DE NEGOCIO Y OPERACIÓN
+- **Resumen / Actividad:** ${current.business_overview || diagnostic?.business_activity || 'No especificado'}
+- **Modelo de Negocio:** ${current.business_model || diagnostic?.business_model || 'No especificado'}
+- **Productos / Servicios:** ${current.products_services || diagnostic?.products_services || 'No especificado'}
+- **Público Objetivo:** ${current.target_audience || 'No especificado'}
 
-✨ SOLUCIÓN ESPERADA:
-- Tipo de Software: ${lead?.software_type || 'No especificado'}
-- Módulos Deseados: ${dna.desired_modules || 'No especificado'}
-- Presupuesto Referencial: ${lead?.reference_budget || 'No especificado'}`;
+## ⚠️ 3. DIAGNÓSTICO DE SITUACIÓN ACTUAL & DOLORES CRÍTICOS
+- **Herramientas Actuales:** ${current.current_tools || diagnostic?.current_tools || lead?.current_management_method || 'No especificado'}
+- **Nivel de Digitalización:** ${current.digitalization_level || diagnostic?.digitalization_level || 'Bajo'}
+- **Flujo Operativo Actual:**
+${current.operational_flow || diagnostic?.current_workflow || 'No especificado'}
+- **Dolor / Problema Principal:** ${current.identified_pain_points || diagnostic?.main_problem || lead?.problem_description || 'No especificado'}
+- **Problemas Secundarios:** ${current.secondary_pains || diagnostic?.secondary_problems || 'No especificado'}
+- **Cuellos de Botella Críticos:** ${current.bottlenecks || diagnostic?.bottlenecks || 'No especificado'}
+- **Riesgos y Pérdidas Financieras:** ${current.risks_losses || diagnostic?.risks_losses || 'No especificado'}
+- **Urgencia / Prioridad:** ${current.urgency_priority || diagnostic?.urgency_priority || lead?.priority || 'Media'}
+- **Resultado Esperado:** ${current.expected_outcome || diagnostic?.expected_outcome || 'Optimizar tiempos y centralizar control'}
+
+## 🚀 4. SOLUCIÓN TECNOLÓGICA PROPUESTA & ALCANCE TÉCNICO
+- **Tipo de Software Buscado:** ${lead?.software_type || 'A medida'}
+- **Solución Recomendada:** ${current.proposed_solution || diagnostic?.proposed_solution || 'Software personalizado a medida'}
+- **Módulos Requeridos:** ${current.desired_modules || diagnostic?.potential_modules || 'No especificado'}
+- **Roles de Usuario:** ${current.user_roles || diagnostic?.user_roles || 'Administrador'}
+- **Integraciones Requeridas:** ${current.required_integrations || diagnostic?.required_integrations || 'Ninguna por ahora'}
+- **Migración de Datos:** ${current.data_migration_notes || diagnostic?.data_migration || 'No requerida'}
+- **Riesgos Técnicos / Dependencias:** ${current.technical_risks || diagnostic?.technical_risks || 'Bajo riesgo'}
+- **Presupuesto Referencial:** ${current.reference_budget || current.constraints_budget || lead?.reference_budget || 'A definir'}
+
+## 🎨 5. IDENTIDAD VISUAL & BENCHMARKS
+- **Identidad Visual / Colores / Logo:** ${current.visual_identity_notes || diagnostic?.internal_notes || 'No especificado'}
+- **Preferencias de Diseño:** ${current.design_preferences || 'Interfaz limpia, moderna y fácil de usar'}
+- **Sistemas de Referencia / Benchmarks:** ${current.reference_systems || 'No especificado'}`;
 
     setDna(prev => prev ? { ...prev, consolidated_context: prompt } : null);
   };
@@ -528,6 +630,15 @@ ${dna.identified_pain_points || lead?.problem_description || lead?.main_need || 
                 <Dna className="w-3.5 h-3.5" />
                 Client DNA
               </button>
+              <Link
+                href={`/comercial/demos/nuevo?lead_id=${lead.id}`}
+                onClick={onClose}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 text-xs font-semibold whitespace-nowrap transition-colors"
+                title="Registrar o programar demo para este lead"
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                Registrar Demo
+              </Link>
             </div>
           </div>
 
@@ -1429,147 +1540,529 @@ ${dna.identified_pain_points || lead?.problem_description || lead?.main_need || 
                           <span><strong>Próximo Paso:</strong> {diagnostic.next_action}</span>
                         </div>
                       )}
+
+                      {/* Botones de acción desde el Diagnóstico */}
+                      <div className="pt-3 border-t border-indigo-500/20 flex flex-wrap items-center justify-between gap-2">
+                        <Link
+                          href={`/comercial/demos/nuevo?lead_id=${lead.id}`}
+                          onClick={onClose}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md transition-all"
+                        >
+                          <Monitor className="w-3.5 h-3.5" />
+                          Programar Demo Técnica para este Lead
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('dna')}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-semibold text-xs transition-all"
+                        >
+                          <Dna className="w-3.5 h-3.5" />
+                          Ver / Editar DNA Estratégico
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
             )}
 
-            {/* PESTAÑA 2: CLIENT DNA */}
+            {/* PESTAÑA 2: CLIENT DNA (ADN ESTRATÉGICO COMPLETO) */}
             {activeTab === 'dna' && (
               <div className="space-y-4">
-                <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="text-emerald-400 font-bold flex items-center gap-2">
-                      <Dna className="w-4 h-4" /> DNA Estratégico del Cliente
-                    </h3>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
-                      Base de IA
-                    </span>
+                {/* Header Informativo del DNA */}
+                <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-2xl p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                        <Dna className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-emerald-300 font-bold text-sm">DNA Estratégico del Cliente</h3>
+                        <p className="text-[11px] text-slate-400">
+                          Consolida el perfil completo del cliente y del diagnóstico para prototipos, demos y prompts de IA.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                        v{dna?.version || 1} • {dna?.status || 'Preliminar'}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Captura el modelo de negocio, flujos y dolores para formular propuestas a medida y alimentar prompts de IA.
-                  </p>
+
+                  {/* Acciones de sincronización rápida */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-emerald-500/20 text-xs">
+                    <button
+                      type="button"
+                      onClick={handleManualSyncDna}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/40 text-emerald-200 border border-emerald-500/40 text-[11px] font-semibold transition-all shadow-sm"
+                      title="Importar y sincronizar campos faltantes desde el Lead y Diagnóstico"
+                    >
+                      <RefreshCw className="w-3 h-3 text-emerald-400" />
+                      Sincronizar con Diagnóstico & Lead
+                    </button>
+
+                    <Link
+                      href={`/comercial/demos/nuevo?lead_id=${lead.id}`}
+                      onClick={onClose}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/30 hover:bg-purple-600/40 text-purple-200 border border-purple-500/40 text-[11px] font-semibold transition-all shadow-sm"
+                    >
+                      <Monitor className="w-3 h-3 text-purple-400" />
+                      Crear Demo con este Lead
+                    </Link>
+                  </div>
                 </div>
 
                 {loadingDna ? (
-                  <div className="py-8 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                    Cargando DNA estratégico...
+                  <div className="py-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+                    Cargando DNA estratégico del cliente...
                   </div>
                 ) : (
-                  <form onSubmit={handleSaveDna} className="space-y-4 text-xs">
-                    <div className="grid grid-cols-2 gap-3">
+                  <form onSubmit={handleSaveDna} className="space-y-6 text-xs">
+                    {/* ─── 1. IDENTIDAD DEL NEGOCIO & CONTACTO ─── */}
+                    <div className="p-4 bg-slate-950/70 rounded-xl border border-slate-800 space-y-3">
+                      <span className="font-bold text-white flex items-center gap-1.5 text-xs pb-1 border-b border-slate-800/80">
+                        <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+                        1. Identidad Empresarial y Contacto Directo
+                      </span>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Nombre Comercial</label>
+                          <input
+                            type="text"
+                            value={dna?.business_name || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, business_name: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Nicho / Industria</label>
+                          <input
+                            type="text"
+                            value={dna?.industry_niche || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, industry_niche: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Persona de Contacto</label>
+                          <input
+                            type="text"
+                            placeholder="Nombre del tomador de decisión"
+                            value={dna?.contact_person || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, contact_person: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Cargo / Rol</label>
+                          <input
+                            type="text"
+                            placeholder="Gerente, Dueño, Operaciones..."
+                            value={dna?.contact_role || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, contact_role: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Teléfono / WhatsApp</label>
+                          <input
+                            type="text"
+                            value={dna?.contact_phone || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, contact_phone: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Correo Electrónico</label>
+                          <input
+                            type="email"
+                            value={dna?.contact_email || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, contact_email: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Ubicación / Ciudad</label>
+                          <input
+                            type="text"
+                            placeholder="Quito, Guayaquil, etc."
+                            value={dna?.location || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, location: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Tamaño de Equipo</label>
+                          <input
+                            type="text"
+                            placeholder="Ej. 4 personas, 10-20 empleados"
+                            value={dna?.team_size || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, team_size: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div className="col-span-2">
+                          <label className="block text-slate-400 mb-1 font-semibold">Sucursales / Sedes Físicas</label>
+                          <input
+                            type="text"
+                            placeholder="Ej. Matriz en Centro y taller en Norte"
+                            value={dna?.branches_locations || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, branches_locations: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ─── 2. MODELO DE NEGOCIO Y OPERACIÓN ─── */}
+                    <div className="p-4 bg-slate-950/70 rounded-xl border border-slate-800 space-y-3">
+                      <span className="font-bold text-white flex items-center gap-1.5 text-xs pb-1 border-b border-slate-800/80">
+                        <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
+                        2. Modelo de Negocio y Oferta Comercial
+                      </span>
+
                       <div>
-                        <label className="block text-slate-400 mb-1 font-semibold">Nombre del Negocio</label>
-                        <input
-                          type="text"
-                          value={dna?.business_name || ''}
-                          onChange={e => setDna(prev => prev ? { ...prev, business_name: e.target.value } : null)}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                        <label className="block text-slate-400 mb-1 font-semibold">Resumen del Negocio (A qué se dedican)</label>
+                        <textarea
+                          rows={2}
+                          value={dna?.business_overview || ''}
+                          onChange={e => setDna(prev => prev ? { ...prev, business_overview: e.target.value } : null)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          placeholder="Ej. Servicios técnicos en campo de electricidad residencial e industrial..."
                         />
                       </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Modelo de Negocio</label>
+                          <input
+                            type="text"
+                            placeholder="Venta directa, B2B, Suscripción..."
+                            value={dna?.business_model || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, business_model: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Público Objetivo / Clientes Finales</label>
+                          <input
+                            type="text"
+                            placeholder="Hogares, fábricas, condominios..."
+                            value={dna?.target_audience || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, target_audience: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                      </div>
+
                       <div>
-                        <label className="block text-slate-400 mb-1 font-semibold">Nicho / Industria</label>
-                        <input
-                          type="text"
-                          value={dna?.industry_niche || ''}
-                          onChange={e => setDna(prev => prev ? { ...prev, industry_niche: e.target.value } : null)}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                        <label className="block text-slate-400 mb-1 font-semibold">Productos o Servicios que Comercializan</label>
+                        <textarea
+                          rows={2}
+                          placeholder="Instalaciones eléctricas, mantenimiento de tableros, cableado estructurado..."
+                          value={dna?.products_services || ''}
+                          onChange={e => setDna(prev => prev ? { ...prev, products_services: e.target.value } : null)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
                         />
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-slate-400 mb-1 font-semibold">Resumen del Negocio (A qué se dedican)</label>
-                      <textarea
-                        rows={2}
-                        value={dna?.business_overview || ''}
-                        onChange={e => setDna(prev => prev ? { ...prev, business_overview: e.target.value } : null)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
-                        placeholder="Ej. Importadora de insumos médicos con 3 sucursales..."
-                      />
-                    </div>
+                    {/* ─── 3. DOLORES Y DIAGNÓSTICO CRÍTICO ─── */}
+                    <div className="p-4 bg-slate-950/70 rounded-xl border border-rose-500/20 space-y-3">
+                      <div className="flex items-center justify-between pb-1 border-b border-rose-500/20">
+                        <span className="font-bold text-rose-300 flex items-center gap-1.5 text-xs">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                          3. Diagnóstico de Dolores, Cuellos de Botella y Riesgos
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-slate-400">Urgencia:</span>
+                          <select
+                            value={dna?.urgency_priority || 'Media'}
+                            onChange={e => setDna(prev => prev ? { ...prev, urgency_priority: e.target.value } : null)}
+                            className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-white text-[11px]"
+                          >
+                            <option value="Alta">Alta</option>
+                            <option value="Media">Media</option>
+                            <option value="Baja">Baja</option>
+                          </select>
+                        </div>
+                      </div>
 
-                    <div>
-                      <label className="block text-slate-400 mb-1 font-semibold">Dolores / Problemas Principales</label>
-                      <textarea
-                        rows={2}
-                        value={dna?.identified_pain_points || ''}
-                        onChange={e => setDna(prev => prev ? { ...prev, identified_pain_points: e.target.value } : null)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
-                        placeholder="Ej. Pierden información en Excel, falta de sincronización multisede..."
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-slate-400 mb-1 font-semibold">Herramientas Actuales</label>
-                        <input
-                          type="text"
-                          value={dna?.current_tools || ''}
-                          onChange={e => setDna(prev => prev ? { ...prev, current_tools: e.target.value } : null)}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
-                          placeholder="Excel, WhatsApp, Cuaderno"
+                        <label className="block text-slate-400 mb-1 font-semibold">Dolor / Problema Principal</label>
+                        <textarea
+                          rows={2}
+                          value={dna?.identified_pain_points || ''}
+                          onChange={e => setDna(prev => prev ? { ...prev, identified_pain_points: e.target.value } : null)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-rose-500"
+                          placeholder="Ej. Demoras en generar proformas, descontrol en agendamiento de visitas técnicas..."
                         />
                       </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Cuellos de Botella Operativos</label>
+                          <textarea
+                            rows={2}
+                            value={dna?.bottlenecks || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, bottlenecks: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-rose-500"
+                            placeholder="Agendamiento y proformas manuales..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Riesgos / Pérdidas Financieras</label>
+                          <textarea
+                            rows={2}
+                            value={dna?.risks_losses || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, risks_losses: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-rose-500"
+                            placeholder="Poco seguimiento a prospectos, cotizaciones no cerradas..."
+                          />
+                        </div>
+                      </div>
+
                       <div>
-                        <label className="block text-slate-400 mb-1 font-semibold">Módulos Deseados</label>
+                        <label className="block text-slate-400 mb-1 font-semibold">Resultado Esperado por el Cliente</label>
                         <input
                           type="text"
-                          value={dna?.desired_modules || ''}
-                          onChange={e => setDna(prev => prev ? { ...prev, desired_modules: e.target.value } : null)}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
-                          placeholder="Inventario, CRM, Facturación"
+                          placeholder="Ej. Reducir tiempo de emisión de proformas de 2 días a 10 minutos y ver técnicos en mapa..."
+                          value={dna?.expected_outcome || ''}
+                          onChange={e => setDna(prev => prev ? { ...prev, expected_outcome: e.target.value } : null)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
                         />
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-slate-400 mb-1 font-semibold">Flujo Operativo Actual</label>
-                      <textarea
-                        rows={3}
-                        value={dna?.operational_flow || ''}
-                        onChange={e => setDna(prev => prev ? { ...prev, operational_flow: e.target.value } : null)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
-                        placeholder="El cliente escribe por WhatsApp, el vendedor anota en Excel, luego pasan la orden a bodega..."
-                      />
+                    {/* ─── 4. HERRAMIENTAS ACTUALES & FLUJO OPERATIVO ─── */}
+                    <div className="p-4 bg-slate-950/70 rounded-xl border border-slate-800 space-y-3">
+                      <span className="font-bold text-white flex items-center gap-1.5 text-xs pb-1 border-b border-slate-800/80">
+                        <Workflow className="w-3.5 h-3.5 text-cyan-400" />
+                        4. Herramientas Actuales y Flujo Operativo Paso a Paso
+                      </span>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Herramientas que Usan Hoy</label>
+                          <input
+                            type="text"
+                            value={dna?.current_tools || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, current_tools: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                            placeholder="Excel, WhatsApp, Cuaderno"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Nivel de Digitalización</label>
+                          <select
+                            value={dna?.digitalization_level || 'Bajo'}
+                            onChange={e => setDna(prev => prev ? { ...prev, digitalization_level: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          >
+                            <option value="Bajo">Bajo (Manual / Papel / WhatsApp)</option>
+                            <option value="Medio">Medio (Hojas de cálculo / Drive)</option>
+                            <option value="Alto">Alto (Sistemas legados / ERPs)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-400 mb-1 font-semibold">Flujo Operativo Actual (Paso a paso)</label>
+                        <textarea
+                          rows={3}
+                          value={dna?.operational_flow || ''}
+                          onChange={e => setDna(prev => prev ? { ...prev, operational_flow: e.target.value } : null)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          placeholder="1. Contacto con el cliente por WhatsApp&#10;2. Identificación del problema en campo&#10;3. Emisión de proforma en cuaderno/Word&#10;4. Espera de confirmación..."
+                        />
+                      </div>
                     </div>
 
-                    {/* Botón de Generar Contexto IA */}
-                    <div className="pt-2 p-3.5 rounded-xl bg-slate-950 border border-emerald-500/30 space-y-2">
-                      <div className="flex items-center justify-between">
+                    {/* ─── 5. SOLUCIÓN RECOMENDADA & ALCANCE TÉCNICO ─── */}
+                    <div className="p-4 bg-slate-950/70 rounded-xl border border-indigo-500/20 space-y-3">
+                      <span className="font-bold text-indigo-300 flex items-center gap-1.5 text-xs pb-1 border-b border-indigo-500/20">
+                        <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                        5. Solución Tecnológica Propuesta y Requerimientos
+                      </span>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Solución Recomendada (Robinson)</label>
+                          <input
+                            type="text"
+                            placeholder="ERP/CRM a medida, Web App..."
+                            value={dna?.proposed_solution || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, proposed_solution: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Módulos Deseados</label>
+                          <input
+                            type="text"
+                            value={dna?.desired_modules || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, desired_modules: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-indigo-500"
+                            placeholder="Control de agendamiento, Proformas, Facturación..."
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Roles de Usuario</label>
+                          <input
+                            type="text"
+                            placeholder="Administradores y Técnicos"
+                            value={dna?.user_roles || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, user_roles: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Integraciones Requeridas</label>
+                          <input
+                            type="text"
+                            placeholder="WhatsApp API, Facturación SRI..."
+                            value={dna?.required_integrations || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, required_integrations: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Migración de Datos</label>
+                          <input
+                            type="text"
+                            placeholder="Importar lista de clientes desde Excel..."
+                            value={dna?.data_migration_notes || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, data_migration_notes: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Presupuesto / Restricciones</label>
+                          <input
+                            type="text"
+                            placeholder="Ej. $1,200 - $2,500 referencial"
+                            value={dna?.constraints_budget || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, constraints_budget: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ─── 6. IDENTIDAD VISUAL & BENCHMARKS ─── */}
+                    <div className="p-4 bg-slate-950/70 rounded-xl border border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between pb-1 border-b border-slate-800/80">
+                        <span className="font-bold text-white flex items-center gap-1.5 text-xs">
+                          <Palette className="w-3.5 h-3.5 text-pink-400" />
+                          6. Identidad Visual, UX y Software de Referencia
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-slate-400">Estado DNA:</span>
+                          <select
+                            value={dna?.status || 'Preliminar'}
+                            onChange={e => setDna(prev => prev ? { ...prev, status: e.target.value as any } : null)}
+                            className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-white text-[11px]"
+                          >
+                            <option value="Preliminar">Preliminar</option>
+                            <option value="Confirmado">Confirmado</option>
+                            <option value="En validación">En validación</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Identidad Visual / Colores / Logo</label>
+                          <input
+                            type="text"
+                            placeholder="Ej. Azul y blanco, logo entregado..."
+                            value={dna?.visual_identity_notes || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, visual_identity_notes: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1 font-semibold">Sistemas de Referencia / Benchmarks</label>
+                          <input
+                            type="text"
+                            placeholder="Ej. Interfaz limpia tipo CRM moderno..."
+                            value={dna?.reference_systems || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, reference_systems: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div className="col-span-2">
+                          <label className="block text-slate-400 mb-1 font-semibold">Preferencias de Diseño / Experiencia de Usuario</label>
+                          <input
+                            type="text"
+                            placeholder="Botones grandes para técnicos en celular, vista de calendario..."
+                            value={dna?.design_preferences || ''}
+                            onChange={e => setDna(prev => prev ? { ...prev, design_preferences: e.target.value } : null)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ─── 7. PROMPT CONSOLIDADO PARA IA ─── */}
+                    <div className="p-4 rounded-xl bg-slate-950 border border-emerald-500/30 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <label className="text-emerald-400 font-bold flex items-center gap-1.5 text-xs">
-                            <Sparkles className="w-3.5 h-3.5" /> Consolidar Contexto para IA
+                            <Sparkles className="w-3.5 h-3.5" /> Consolidar Contexto para IA (Prompt Maestro)
                           </label>
                           <p className="text-[10px] text-slate-400 mt-0.5">
-                            Genera un prompt estructurado para demos, propuestas o ChatGPT.
+                            Genera el prompt exhaustivo estructurado con toda la información del cliente y del diagnóstico.
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={generateAIContext}
-                          className="text-[11px] px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
-                        >
-                          <Wand2 className="w-3.5 h-3.5" />
-                          Generar Contexto
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={generateAIContext}
+                            className="text-[11px] px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+                          >
+                            <Wand2 className="w-3.5 h-3.5" />
+                            Generar Contexto
+                          </button>
+                          {dna?.consolidated_context && (
+                            <button
+                              type="button"
+                              onClick={handleCopyPrompt}
+                              className="text-[11px] px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg border border-slate-700 shadow-sm transition-colors flex items-center gap-1.5"
+                            >
+                              {copiedPrompt ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                              {copiedPrompt ? 'Copiado!' : 'Copiar Prompt'}
+                            </button>
+                          )}
+                        </div>
                       </div>
+
                       <textarea
-                        rows={7}
+                        rows={10}
                         value={dna?.consolidated_context || ''}
                         onChange={e => setDna(prev => prev ? { ...prev, consolidated_context: e.target.value } : null)}
                         className="w-full bg-slate-900 border border-emerald-500/20 focus:border-emerald-500 rounded-lg p-3 text-white font-mono text-[11px] leading-relaxed"
-                        placeholder="Haz clic en 'Generar Contexto' para autocompletar el prompt..."
+                        placeholder="Haz clic en 'Generar Contexto' para autocompletar el prompt integral con todos los datos del cliente y del diagnóstico..."
                       />
                     </div>
 
-                    <div className="flex justify-end pt-2 border-t border-slate-800">
+                    {/* Botón de guardado final */}
+                    <div className="flex justify-end pt-3 border-t border-slate-800">
                       <button
                         type="submit"
                         disabled={savingDna}
-                        className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-50"
+                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-lg shadow-emerald-600/25 transition-all disabled:opacity-50"
                       >
                         {savingDna ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                         Guardar DNA Estratégico

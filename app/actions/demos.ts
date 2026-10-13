@@ -5,14 +5,31 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/utils/supabase/server';
 import { DemoApprovalStatus, DemoFile, AIUsageWindow } from '@/types/database.types';
 
+// ─── Obtener Contexto de Lead para Demo ──────────────────────
+export async function getLeadContextForDemoAction(leadId: string) {
+  const supabase = createClient();
+  const [{ data: lead }, { data: diagnostic }, { data: dna }] = await Promise.all([
+    supabase.from('leads').select('*').eq('id', leadId).single(),
+    supabase.from('diagnostics').select('*').eq('lead_id', leadId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('company_dna').select('*').eq('lead_id', leadId).order('version', { ascending: false }).limit(1).maybeSingle(),
+  ]);
+
+  return { lead, diagnostic, dna };
+}
+
 // ─── Crear / Solicitar Demo ───────────────────────────────────
 export async function createDemoAction(formData: FormData) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const payload = {
-    lead_id:                  (formData.get('lead_id') as string) || null,
-    client_id:                (formData.get('client_id') as string) || null,
+  const rawLeadId = (formData.get('lead_id') as string) || null;
+  const leadId = rawLeadId && rawLeadId.trim() !== '' ? rawLeadId.trim() : null;
+  const rawClientId = (formData.get('client_id') as string) || null;
+  const clientId = rawClientId && rawClientId.trim() !== '' ? rawClientId.trim() : null;
+
+  const payload: Record<string, any> = {
+    lead_id:                  leadId,
+    client_id:                clientId,
     name:                     (formData.get('name') as string).trim(),
     software_type:            (formData.get('software_type') as string) || 'Web App',
     description:              (formData.get('description') as string)?.trim() || null,
@@ -27,14 +44,23 @@ export async function createDemoAction(formData: FormData) {
     test_data_used:           (formData.get('test_data_used') as string)?.trim() || null,
     known_limitations:        (formData.get('known_limitations') as string)?.trim() || null,
     acceptance_criteria:      (formData.get('acceptance_criteria') as string)?.trim() || null,
-    status:                   'Pendiente',
-    approval_status:          'Solicitud enviada' as DemoApprovalStatus,
-    demo_version:             1,
-    assigned_to:              user?.id || null,
+    status:                   (formData.get('status') as string) || 'Pendiente',
+    approval_status:          ((formData.get('approval_status') as string) || 'Solicitud enviada') as DemoApprovalStatus,
+    demo_version:             Number(formData.get('demo_version')) || 1,
+    dna_version_used:         formData.get('dna_version_used') ? Number(formData.get('dna_version_used')) : 1,
+    diagnostic_id:            (formData.get('diagnostic_id') as string)?.trim() || null,
+    scheduled_at:             (formData.get('scheduled_at') as string)?.trim() || null,
+    assigned_to:              (formData.get('assigned_to') as string) || user?.id || null,
   };
 
   const { data, error } = await supabase.from('demos').insert([payload]).select().single();
   if (error) throw new Error(error.message);
+
+  // Actualizar el estado del lead a 'Demo' en el Kanban si se especifica o por defecto
+  const shouldUpdateLead = formData.get('update_lead_status') !== 'false';
+  if (payload.lead_id && shouldUpdateLead) {
+    await supabase.from('leads').update({ status: 'Demo' }).eq('id', payload.lead_id);
+  }
 
   // Notificar o registrar actividad si hay lead asociado
   if (payload.lead_id) {
@@ -52,6 +78,8 @@ export async function createDemoAction(formData: FormData) {
   }
 
   revalidatePath('/comercial/demos');
+  revalidatePath('/leads');
+  revalidatePath('/dashboard');
   redirect(`/comercial/demos/${data.id}`);
 }
 
@@ -324,3 +352,14 @@ export async function convertDemoToProposalAction(demoId: string): Promise<strin
   revalidatePath('/comercial/propuestas');
   return proposal.id;
 }
+
+// ─── Eliminar Demo ───────────────────────────────────────────
+export async function deleteDemoAction(demoId: string) {
+  const supabase = createClient();
+  const { error } = await supabase.from('demos').delete().eq('id', demoId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/comercial/demos');
+  return { success: true };
+}
+

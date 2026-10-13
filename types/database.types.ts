@@ -228,6 +228,7 @@ export interface Demo {
   client_feedback_notes?: string | null;
   client_feedback_date?: string | null;
   presented_at: string | null;
+  scheduled_at?: string | null;
   assigned_to: string | null;
   observations: string | null;
   created_at: string;
@@ -323,6 +324,26 @@ export interface CompanyDNA {
   constraints_budget: string | null;
   consolidated_context: string | null; // Contexto en Markdown para redacción manual del prompt
   status: 'Preliminar' | 'Confirmado' | 'En validación';
+  // Campos enriquecidos del cliente y del diagnóstico
+  products_services?: string | null;
+  team_size?: string | null;
+  branches_locations?: string | null;
+  digitalization_level?: string | null;
+  secondary_pains?: string | null;
+  bottlenecks?: string | null;
+  risks_losses?: string | null;
+  urgency_priority?: string | null;
+  expected_outcome?: string | null;
+  proposed_solution?: string | null;
+  user_roles?: string | null;
+  data_migration_notes?: string | null;
+  technical_risks?: string | null;
+  contact_person?: string | null;
+  contact_role?: string | null;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  location?: string | null;
+  reference_budget?: string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string;
