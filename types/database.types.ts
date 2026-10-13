@@ -207,6 +207,9 @@ export interface Demo {
   description: string | null;
   objective: string | null;
   demo_url: string | null;
+  vercel_url?: string | null;
+  github_url?: string | null;
+  database_url?: string | null;
   status: DemoStatus;
   approval_status?: DemoApprovalStatus;
   approved_by?: string | null;

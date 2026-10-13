@@ -194,6 +194,29 @@ A continuación se detalla el análisis comparativo entre los requerimientos del
 
 ## 8. Historial de Versiones y Modificaciones
 
+### Versión 2.6.0 (13/10/2026) - Enlaces Técnicos (Vercel, GitHub, Supabase DB) y Carga Directa de Archivos Markdown (.md)
+- **Base de Datos & Migraciones:**
+  - Migración aplicada exitosamente con Supabase CLI: `20261013123500_add_demo_links.sql`.
+  - Columnas añadidas a la tabla `public.demos`:
+    - `vercel_url TEXT`: Enlace de despliegue en Vercel para la demo interactiva.
+    - `github_url TEXT`: Enlace al repositorio fuente en GitHub correspondiente a la demo.
+    - `database_url TEXT`: URL de conexión o acceso al panel de base de datos / Supabase.
+- **Tipado & Modelos:**
+  - Actualización de la interfaz `Demo` en `types/database.types.ts` con `vercel_url`, `github_url` y `database_url`.
+- **Lógica de Servidor & Server Actions:**
+  - `app/actions/demos.ts`:
+    - `createDemoAction`: Inserción de `vercel_url`, `github_url` y `database_url`. Procesamiento e inserción transaccional de archivos Markdown iniciales adjuntos (`initial_md_files`) en la tabla `demo_files`.
+    - `updateDemoUrlsAction`: Nueva Server Action para actualización atómica e inmediata de los enlaces técnicos (`demo_url`, `vercel_url`, `github_url`, `database_url`) desde la vista de detalle.
+- **Experiencia de Usuario & Vistas:**
+  - `components/demos/nueva-demo-form.tsx`:
+    - Agrupación dedicada para Enlaces Técnicos y Despliegues (`demo_url`, `vercel_url`, `github_url`, `database_url`) con iconografía clara y campos de entrada validados.
+    - Sección 5: "Cargar Archivos de Especificaciones (.md)" con selector de archivos en disco y dropzone de arrastrar/soltar (soporte multi-archivo), lectura en memoria vía `FileReader`, lista de archivos cargados con tamaño, previsualización modal de contenido y eliminación previa al registro.
+  - `components/demos/demo-detail-view.tsx`:
+    - Barra de Enlaces Técnicos y Despliegues en el encabezado con accesos rápidos interactivos a Vercel, repositorio GitHub, copia/acceso a la URL de Base de Datos y Prototipo/Reunión.
+    - Panel desplegable para edición inmediata y actualización en tiempo real de los enlaces técnicos.
+    - Resumen integrado de enlaces técnicos en la pestaña de Información y Alcance Funcional.
+    - Pestaña de Archivos `.md` enriquecida con selector directo de archivos desde el equipo y dropzone Drag & Drop, importando el nombre y contenido directamente sin requerir copiar y pegar texto manualmente.
+
 ### Versión 2.5.0 (04/10/2026) - Fase F (Dashboard Directivo Avanzado, Indicadores Reales, Notificaciones Internas y Auditoría)
 - **Base de Datos & CLI:**
   - Migración aplicada por Supabase CLI: `20261004000004_fase_f_notificaciones_internas.sql`.

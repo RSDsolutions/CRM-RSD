@@ -17,7 +17,8 @@ import {
   uploadDemoMarkdownAction,
   deleteDemoFileAction,
   registerAIUsageWindowAction,
-  recordDemoPresentationResultAction
+  recordDemoPresentationResultAction,
+  updateDemoUrlsAction
 } from '@/app/actions/demos';
 import { 
   ArrowLeft, 
@@ -37,7 +38,14 @@ import {
   Clock, 
   Sparkles,
   ExternalLink,
-  Presentation
+  Presentation,
+  Github,
+  Database,
+  Globe,
+  UploadCloud,
+  Edit3,
+  Copy,
+  Check
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -70,6 +78,59 @@ export function DemoDetailView({
   // Formulario nuevo archivo .md
   const [newFileName, setNewFileName] = useState('');
   const [newFileContent, setNewFileContent] = useState('');
+  const [isReadingDetailFile, setIsReadingDetailFile] = useState(false);
+
+  // Estado para gestión de Enlaces Técnicos (Vercel, GitHub, DB, Demo)
+  const [urls, setUrls] = useState({
+    demo_url: demo.demo_url || '',
+    vercel_url: demo.vercel_url || '',
+    github_url: demo.github_url || '',
+    database_url: demo.database_url || '',
+  });
+  const [isEditingUrls, setIsEditingUrls] = useState(false);
+  const [savingUrls, setSavingUrls] = useState(false);
+  const [copiedDb, setCopiedDb] = useState(false);
+
+  // Guardar enlaces técnicos
+  const handleSaveUrls = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingUrls(true);
+    try {
+      const res = await updateDemoUrlsAction(demo.id, urls);
+      if (res.success) {
+        demo.demo_url = urls.demo_url || null;
+        demo.vercel_url = urls.vercel_url || null;
+        demo.github_url = urls.github_url || null;
+        demo.database_url = urls.database_url || null;
+        setIsEditingUrls(false);
+      } else {
+        alert('Error al guardar enlaces: ' + (res.error || 'Desconocido'));
+      }
+    } catch (err: any) {
+      alert('Error inesperado: ' + err.message);
+    } finally {
+      setSavingUrls(false);
+    }
+  };
+
+  // Selector de archivo .md
+  const handleDetailFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsReadingDetailFile(true);
+    try {
+      const text = await file.text();
+      setNewFileName(file.name);
+      setNewFileContent(text);
+    } catch (err) {
+      console.error('Error al leer el archivo .md:', err);
+      alert('No se pudo leer el archivo seleccionado.');
+    } finally {
+      setIsReadingDetailFile(false);
+      e.target.value = '';
+    }
+  };
 
   // Formulario nueva ventana de IA
   const [newAIWindow, setNewAIWindow] = useState({
@@ -260,6 +321,200 @@ export function DemoDetailView({
         </div>
       </div>
 
+      {/* ─── BARRA DE ENLACES TÉCNICOS Y DESPLIEGUES ─── */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1.5">
+            <Globe className="w-3.5 h-3.5 text-sky-400" />
+            Entornos:
+          </span>
+
+          {/* Vercel */}
+          {urls.vercel_url ? (
+            <a
+              href={urls.vercel_url.startsWith('http') ? urls.vercel_url : `https://${urls.vercel_url}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black hover:bg-slate-950 text-white text-xs border border-slate-700 hover:border-slate-500 font-medium transition-all shadow-sm group"
+            >
+              <Globe className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
+              <span>Vercel App</span>
+              <ExternalLink className="w-3 h-3 text-slate-400" />
+            </a>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/60 text-slate-500 text-xs border border-slate-800/80">
+              <Globe className="w-3.5 h-3.5 text-slate-600" />
+              Vercel: No asignado
+            </span>
+          )}
+
+          {/* GitHub */}
+          {urls.github_url ? (
+            <a
+              href={urls.github_url.startsWith('http') ? urls.github_url : `https://${urls.github_url}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-100 text-xs border border-slate-700 hover:border-slate-500 font-medium transition-all shadow-sm group"
+            >
+              <Github className="w-3.5 h-3.5 text-white group-hover:scale-110 transition-transform" />
+              <span>Repositorio GitHub</span>
+              <ExternalLink className="w-3 h-3 text-slate-400" />
+            </a>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/60 text-slate-500 text-xs border border-slate-800/80">
+              <Github className="w-3.5 h-3.5 text-slate-600" />
+              GitHub: No asignado
+            </span>
+          )}
+
+          {/* Database */}
+          {urls.database_url ? (
+            urls.database_url.startsWith('http') ? (
+              <a
+                href={urls.database_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-950/70 text-emerald-300 text-xs border border-emerald-500/30 hover:border-emerald-500/50 font-medium transition-all shadow-sm group"
+              >
+                <Database className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                <span>Base de Datos</span>
+                <ExternalLink className="w-3 h-3 text-emerald-400" />
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(urls.database_url);
+                  setCopiedDb(true);
+                  setTimeout(() => setCopiedDb(false), 2000);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-950/70 text-emerald-300 text-xs border border-emerald-500/30 font-medium transition-all shadow-sm"
+              >
+                <Database className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{copiedDb ? 'Copiado!' : 'Copiar URL BD'}</span>
+                {copiedDb ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-emerald-400" />}
+              </button>
+            )
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/60 text-slate-500 text-xs border border-slate-800/80">
+              <Database className="w-3.5 h-3.5 text-slate-600" />
+              BD: No asignada
+            </span>
+          )}
+
+          {/* Demo URL */}
+          {urls.demo_url && (
+            <a
+              href={urls.demo_url.startsWith('http') ? urls.demo_url : `https://${urls.demo_url}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/40 hover:bg-indigo-950/70 text-indigo-300 text-xs border border-indigo-500/30 hover:border-indigo-500/50 font-medium transition-all shadow-sm group"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-110 transition-transform" />
+              <span>Sala / Demo</span>
+            </a>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsEditingUrls(!isEditingUrls)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold border border-slate-700 transition-colors self-start md:self-auto"
+        >
+          <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
+          <span>{isEditingUrls ? 'Cerrar Edición' : 'Editar Enlaces'}</span>
+        </button>
+      </div>
+
+      {/* Panel Desplegable para Editar Enlaces Técnicos */}
+      {isEditingUrls && (
+        <form onSubmit={handleSaveUrls} className="bg-slate-900 border border-indigo-500/30 rounded-2xl p-5 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Globe className="w-4 h-4 text-indigo-400" />
+              Actualizar Enlaces Técnicos del Proyecto
+            </h3>
+            <span className="text-[11px] text-slate-400">Robinson Solórzano / Dev Team</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1 flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                Link de Despliegue en Vercel
+              </label>
+              <input
+                type="url"
+                placeholder="https://mi-demo.vercel.app"
+                value={urls.vercel_url}
+                onChange={e => setUrls({ ...urls, vercel_url: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1 flex items-center gap-1.5">
+                <Github className="w-3.5 h-3.5 text-slate-200" />
+                Link del Repositorio en GitHub
+              </label>
+              <input
+                type="url"
+                placeholder="https://github.com/RSD-Solutions/demo-cliente"
+                value={urls.github_url}
+                onChange={e => setUrls({ ...urls, github_url: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1 flex items-center gap-1.5">
+                <Database className="w-3.5 h-3.5 text-emerald-400" />
+                URL de Base de Datos / Supabase Dashboard
+              </label>
+              <input
+                type="text"
+                placeholder="https://supabase.com/dashboard/project/... o postgresql://..."
+                value={urls.database_url}
+                onChange={e => setUrls({ ...urls, database_url: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1 flex items-center gap-1.5">
+                <ExternalLink className="w-3.5 h-3.5 text-indigo-400" />
+                URL del Prototipo / Sala de Presentación
+              </label>
+              <input
+                type="url"
+                placeholder="https://meet.google.com/... o https://demo.rsd.app"
+                value={urls.demo_url}
+                onChange={e => setUrls({ ...urls, demo_url: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsEditingUrls(false)}
+              className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-semibold"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={savingUrls}
+              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {savingUrls ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              Guardar Enlaces
+            </button>
+          </div>
+        </form>
+      )}
+
       {/* Barra de progreso de Aprobación */}
       <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl">
         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
@@ -404,6 +659,54 @@ export function DemoDetailView({
                 </Link>
               </div>
             )}
+
+            <div className="pt-3 border-t border-slate-800 space-y-2">
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Enlaces Técnicos Registrados</span>
+              <div className="space-y-1.5 text-[11px]">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <Globe className="w-3 h-3 text-cyan-400" /> Vercel:
+                  </span>
+                  {urls.vercel_url ? (
+                    <a href={urls.vercel_url.startsWith('http') ? urls.vercel_url : `https://${urls.vercel_url}`} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline truncate max-w-[200px]">
+                      {urls.vercel_url}
+                    </a>
+                  ) : (
+                    <span className="text-slate-600 italic">No configurado</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <Github className="w-3 h-3 text-slate-300" /> GitHub:
+                  </span>
+                  {urls.github_url ? (
+                    <a href={urls.github_url.startsWith('http') ? urls.github_url : `https://${urls.github_url}`} target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline truncate max-w-[200px]">
+                      {urls.github_url}
+                    </a>
+                  ) : (
+                    <span className="text-slate-600 italic">No configurado</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <Database className="w-3 h-3 text-emerald-400" /> Base de Datos:
+                  </span>
+                  {urls.database_url ? (
+                    urls.database_url.startsWith('http') ? (
+                      <a href={urls.database_url} target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline truncate max-w-[200px]">
+                        Ver Dashboard
+                      </a>
+                    ) : (
+                      <span className="text-emerald-300/80 font-mono truncate max-w-[200px]">
+                        {urls.database_url}
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-slate-600 italic">No configurado</span>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -412,48 +715,102 @@ export function DemoDetailView({
       {activeTab === 'md_files' && (
         <div className="space-y-6 text-xs">
           {/* Formulario para añadir archivo .md */}
-          <form onSubmit={handleUploadFile} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-            <h3 className="text-xs font-bold text-white flex items-center gap-2">
-              <Upload className="w-4 h-4 text-indigo-400" />
-              Cargar Archivo Markdown (.md) Requerido
-            </h3>
-            <p className="text-[11px] text-slate-400">
-              Adjunta las especificaciones, manuales de prueba o notas de arquitectura en formato Markdown.
-            </p>
+          <form onSubmit={handleUploadFile} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+              <div>
+                <h3 className="text-xs font-bold text-white flex items-center gap-2">
+                  <Upload className="w-4 h-4 text-indigo-400" />
+                  Cargar Archivo Markdown (.md)
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Puedes seleccionar un archivo .md de tu equipo o redactarlo directamente a continuación.
+                </p>
+              </div>
+            </div>
+
+            {/* Selector Directo de Archivo desde el Equipo */}
+            <label className="border-2 border-dashed border-slate-700 hover:border-indigo-500/70 bg-slate-950/60 hover:bg-slate-950 rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all group">
+              <input
+                type="file"
+                accept=".md,.markdown,text/markdown,text/plain"
+                onChange={handleDetailFileSelect}
+                className="sr-only"
+              />
+              <div className="w-10 h-10 rounded-xl bg-indigo-600/10 group-hover:bg-indigo-600/20 text-indigo-400 flex items-center justify-center mb-2 transition-colors">
+                {isReadingDetailFile ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <UploadCloud className="w-5 h-5" />
+                )}
+              </div>
+              <span className="text-xs font-semibold text-slate-200 group-hover:text-indigo-300">
+                {isReadingDetailFile ? 'Cargando contenido...' : 'Haz clic para seleccionar un archivo .md o arrástralo aquí'}
+              </span>
+              <span className="text-[10px] text-slate-500 mt-0.5">
+                Al seleccionar un archivo, el nombre y contenido se cargarán automáticamente en el editor.
+              </span>
+            </label>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-300 font-medium mb-1">Nombre del Archivo</label>
+                <label className="block text-slate-300 font-medium mb-1">Nombre del Archivo *</label>
                 <input
                   type="text"
-                  placeholder="ej. especificaciones_demo.md"
+                  placeholder="ej. arquitectura_demo.md"
                   value={newFileName}
                   onChange={e => setNewFileName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs focus:ring-2 focus:ring-indigo-500"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-slate-300 font-medium mb-1">Contenido Markdown</label>
+              <label className="block text-slate-300 font-medium mb-1 flex items-center justify-between">
+                <span>Contenido Markdown *</span>
+                {newFileContent && (
+                  <span className="text-[10px] text-indigo-300 font-mono">
+                    {newFileContent.split('\n').length} líneas cargadas
+                  </span>
+                )}
+              </label>
               <textarea
-                rows={6}
+                rows={7}
                 placeholder="# Arquitectura de la Demo&#10;&#10;## Flujos Principales..."
                 value={newFileContent}
                 onChange={e => setNewFileContent(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white font-mono text-xs"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white font-mono text-xs focus:ring-2 focus:ring-indigo-500"
                 required
               />
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              {newFileContent && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewFileName('');
+                    setNewFileContent('');
+                  }}
+                  className="px-3 py-2 border border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg font-medium text-xs transition-colors"
+                >
+                  Limpiar
+                </button>
+              )}
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold"
+                disabled={isSubmitting || !newFileName.trim() || !newFileContent.trim()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold text-xs shadow-md disabled:opacity-50 transition-all"
               >
-                + Guardar Archivo .md
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Guardando...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-3.5 h-3.5" /> + Guardar Archivo .md
+                  </>
+                )}
               </button>
             </div>
           </form>

@@ -35,6 +35,9 @@ export async function createDemoAction(formData: FormData) {
     description:              (formData.get('description') as string)?.trim() || null,
     objective:                (formData.get('objective') as string)?.trim() || null,
     demo_url:                 (formData.get('demo_url') as string)?.trim() || null,
+    vercel_url:               (formData.get('vercel_url') as string)?.trim() || null,
+    github_url:               (formData.get('github_url') as string)?.trim() || null,
+    database_url:             (formData.get('database_url') as string)?.trim() || null,
     functional_description:   (formData.get('functional_description') as string)?.trim() || null,
     modules_included:         (formData.get('modules_included') as string)?.trim() || null,
     main_flows:               (formData.get('main_flows') as string)?.trim() || null,
@@ -55,6 +58,28 @@ export async function createDemoAction(formData: FormData) {
 
   const { data, error } = await supabase.from('demos').insert([payload]).select().single();
   if (error) throw new Error(error.message);
+
+  // Guardar archivos .md iniciales si fueron cargados
+  const initialMdFilesJson = formData.get('initial_md_files') as string;
+  if (initialMdFilesJson) {
+    try {
+      const initialFiles = JSON.parse(initialMdFilesJson);
+      if (Array.isArray(initialFiles) && initialFiles.length > 0) {
+        const fileInserts = initialFiles.map((f: { name: string; content: string }) => ({
+          demo_id: data.id,
+          file_name: f.name.endsWith('.md') ? f.name : `${f.name}.md`,
+          file_type: 'markdown',
+          file_content: f.content,
+          file_size_bytes: new TextEncoder().encode(f.content).length,
+          status: 'Recibido',
+          uploaded_by: user?.id || null,
+        }));
+        await supabase.from('demo_files').insert(fileInserts);
+      }
+    } catch (err) {
+      console.error('Error procesando archivos .md iniciales:', err);
+    }
+  }
 
   // Actualizar el estado del lead a 'Demo' en el Kanban si se especifica o por defecto
   const shouldUpdateLead = formData.get('update_lead_status') !== 'false';
@@ -362,4 +387,33 @@ export async function deleteDemoAction(demoId: string) {
   revalidatePath('/comercial/demos');
   return { success: true };
 }
+
+// ─── Actualizar Enlaces Técnicos (Vercel, GitHub, DB, Demo URL) ───
+export async function updateDemoUrlsAction(
+  demoId: string,
+  urls: {
+    demo_url?: string | null;
+    vercel_url?: string | null;
+    github_url?: string | null;
+    database_url?: string | null;
+  }
+) {
+  const supabase = createClient();
+  const updates: Record<string, any> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (urls.demo_url !== undefined) updates.demo_url = urls.demo_url?.trim() || null;
+  if (urls.vercel_url !== undefined) updates.vercel_url = urls.vercel_url?.trim() || null;
+  if (urls.github_url !== undefined) updates.github_url = urls.github_url?.trim() || null;
+  if (urls.database_url !== undefined) updates.database_url = urls.database_url?.trim() || null;
+
+  const { error } = await supabase.from('demos').update(updates).eq('id', demoId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/comercial/demos/${demoId}`);
+  revalidatePath('/comercial/demos');
+  return { success: true };
+}
+
 

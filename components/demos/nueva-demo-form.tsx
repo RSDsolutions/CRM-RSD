@@ -19,7 +19,13 @@ import {
   Search,
   ExternalLink,
   Loader2,
-  FileText
+  FileText,
+  FileCode,
+  Github,
+  Database,
+  Globe,
+  UploadCloud,
+  Trash2
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -78,6 +84,9 @@ export function NuevaDemoForm({
     approval_status: 'Solicitud enviada',
     scheduled_at: '',
     demo_url: '',
+    vercel_url: '',
+    github_url: '',
+    database_url: '',
     objective: '',
     description: '',
     functional_description: '',
@@ -91,6 +100,46 @@ export function NuevaDemoForm({
     acceptance_criteria: '',
     update_lead_status: true,
   });
+
+  // Estado para archivos Markdown (.md)
+  interface UploadedMdFile {
+    name: string;
+    content: string;
+    size: number;
+  }
+  const [uploadedMdFiles, setUploadedMdFiles] = useState<UploadedMdFile[]>([]);
+  const [isReadingFiles, setIsReadingFiles] = useState(false);
+  const [previewFile, setPreviewFile] = useState<UploadedMdFile | null>(null);
+
+  const handleMdFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsReadingFiles(true);
+    const newFiles: UploadedMdFile[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const text = await file.text();
+        newFiles.push({
+          name: file.name,
+          content: text,
+          size: file.size,
+        });
+      } catch (err) {
+        console.error('Error al leer archivo:', file.name, err);
+      }
+    }
+
+    setUploadedMdFiles(prev => [...prev, ...newFiles]);
+    setIsReadingFiles(false);
+    e.target.value = '';
+  };
+
+  const handleRemoveMdFile = (index: number) => {
+    setUploadedMdFiles(prev => prev.filter((_, i) => i !== index));
+  };
 
   const selectedLead = leads.find(l => l.id === selectedLeadId);
   const selectedClient = clients.find(c => c.id === selectedClientId);
@@ -406,18 +455,73 @@ export function NuevaDemoForm({
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase mb-1.5">
-              URL del Prototipo / Sala de Reunión
-            </label>
-            <input
-              type="url"
-              name="demo_url"
-              placeholder="https://meet.google.com/... o https://prototipo.rsd.app"
-              value={formData.demo_url}
-              onChange={e => setFormData({ ...formData, demo_url: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:ring-2 focus:ring-indigo-500"
-            />
+          {/* Enlaces Técnicos y Despliegue */}
+          <div className="md:col-span-2 pt-3 border-t border-slate-800/80">
+            <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Globe className="w-4 h-4 text-sky-400" />
+              Enlaces Técnicos y Entornos de Despliegue
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1.5 flex items-center gap-1.5">
+                  <ExternalLink className="w-3.5 h-3.5 text-indigo-400" />
+                  URL del Prototipo / Sala de Reunión
+                </label>
+                <input
+                  type="url"
+                  name="demo_url"
+                  placeholder="https://meet.google.com/... o https://prototipo.rsd.app"
+                  value={formData.demo_url}
+                  onChange={e => setFormData({ ...formData, demo_url: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1.5 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                  Link de Despliegue en Vercel
+                </label>
+                <input
+                  type="url"
+                  name="vercel_url"
+                  placeholder="https://mi-demo-cliente.vercel.app"
+                  value={formData.vercel_url}
+                  onChange={e => setFormData({ ...formData, vercel_url: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1.5 flex items-center gap-1.5">
+                  <Github className="w-3.5 h-3.5 text-slate-200" />
+                  Link del Repositorio en GitHub
+                </label>
+                <input
+                  type="url"
+                  name="github_url"
+                  placeholder="https://github.com/RSD-Solutions/demo-cliente"
+                  value={formData.github_url}
+                  onChange={e => setFormData({ ...formData, github_url: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1.5 flex items-center gap-1.5">
+                  <Database className="w-3.5 h-3.5 text-emerald-400" />
+                  URL de Base de Datos / Supabase
+                </label>
+                <input
+                  type="text"
+                  name="database_url"
+                  placeholder="https://supabase.com/dashboard/project/... o postgresql://..."
+                  value={formData.database_url}
+                  onChange={e => setFormData({ ...formData, database_url: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
           </div>
 
           <div>
@@ -612,7 +716,120 @@ export function NuevaDemoForm({
         </div>
       </div>
 
-      {/* ─── 5. ACCIONES Y PIPELINE ─── */}
+      {/* ─── 5. ARCHIVOS DE ESPECIFICACIÓN Y ARQUITECTURA (.MD) ─── */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+          <div>
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <FileCode className="w-4 h-4 text-indigo-400" />
+              5. Cargar Archivos de Especificaciones (.md)
+            </h2>
+            <p className="text-xs text-slate-400 mt-1">
+              Adjunta las especificaciones funcionales, prompts, diagramas o bitácoras en Markdown (.md). Se guardarán vinculados a la demo.
+            </p>
+          </div>
+          <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-semibold self-start sm:self-auto">
+            {uploadedMdFiles.length} archivo(s) seleccionado(s)
+          </span>
+        </div>
+
+        {/* Input Oculto con los archivos JSON para el server action */}
+        <input
+          type="hidden"
+          name="initial_md_files"
+          value={JSON.stringify(uploadedMdFiles)}
+        />
+
+        {/* Zona de Arrastrar o Seleccionar Archivo */}
+        <label className="relative border-2 border-dashed border-slate-700 hover:border-indigo-500/70 bg-slate-950/60 hover:bg-slate-950 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all group">
+          <input
+            type="file"
+            accept=".md,.markdown,text/markdown,text/plain"
+            multiple
+            onChange={handleMdFileUpload}
+            className="sr-only"
+          />
+          <div className="w-12 h-12 rounded-xl bg-indigo-600/10 group-hover:bg-indigo-600/20 text-indigo-400 flex items-center justify-center mb-3 transition-colors">
+            {isReadingFiles ? (
+              <Loader2 className="w-6 h-6 animate-spin" />
+            ) : (
+              <UploadCloud className="w-6 h-6" />
+            )}
+          </div>
+          <span className="text-xs font-semibold text-slate-200 group-hover:text-indigo-300">
+            {isReadingFiles ? 'Procesando archivos...' : 'Haz clic para explorar o arrastra archivos .md aquí'}
+          </span>
+          <span className="text-[11px] text-slate-500 mt-1">
+            Formatos aceptados: .md, .markdown. Puedes seleccionar varios archivos a la vez.
+          </span>
+        </label>
+
+        {/* Lista de Archivos Cargados */}
+        {uploadedMdFiles.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            {uploadedMdFiles.map((file, idx) => (
+              <div
+                key={idx}
+                className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-3 text-xs"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <FileCode className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-200 truncate">{file.name}</p>
+                    <p className="text-[10px] text-slate-500">
+                      {(file.size / 1024).toFixed(1)} KB • {file.content.split('\n').length} líneas
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewFile(file)}
+                    className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-indigo-300 transition-colors"
+                    title="Vista previa del contenido"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveMdFile(idx)}
+                    className="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
+                    title="Eliminar archivo"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Modal de Vista Previa Rápida */}
+        {previewFile && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden shadow-2xl">
+              <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+                <span className="font-bold text-white text-xs flex items-center gap-2">
+                  <FileCode className="w-4 h-4 text-indigo-400" />
+                  {previewFile.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPreviewFile(null)}
+                  className="text-slate-400 hover:text-white text-xs font-semibold px-2 py-1"
+                >
+                  Cerrar
+                </button>
+              </div>
+              <div className="p-5 overflow-y-auto flex-1 bg-slate-950 font-mono text-xs text-slate-300 whitespace-pre-wrap">
+                {previewFile.content}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ─── 6. ACCIONES Y PIPELINE ─── */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
         <label className="flex items-center gap-2.5 cursor-pointer text-xs text-slate-300">
           <input
