@@ -230,6 +230,11 @@ export interface Demo {
   client_feedback_decision?: string | null;
   client_feedback_notes?: string | null;
   client_feedback_date?: string | null;
+  agreed_price?: number | null;
+  is_installment?: boolean;
+  installments_count?: number | null;
+  payment_terms_notes?: string | null;
+  non_acceptance_reason?: string | null;
   presented_at: string | null;
   scheduled_at?: string | null;
   assigned_to: string | null;
@@ -775,6 +780,7 @@ export interface AvailabilityBlock {
   start_time: string;
   end_time: string;
   is_available: boolean;
+  is_all_day?: boolean;
   notes: string | null;
   created_at: string;
   updated_at: string;

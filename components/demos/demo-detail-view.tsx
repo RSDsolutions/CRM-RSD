@@ -45,7 +45,10 @@ import {
   UploadCloud,
   Edit3,
   Copy,
-  Check
+  Check,
+  DollarSign,
+  CreditCard,
+  AlertTriangle
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -148,9 +151,16 @@ export function DemoDetailView({
 
   // Formulario de resultado de presentación
   const [presentationResult, setPresentationResult] = useState({
-    presented_at: new Date().toISOString().slice(0, 16),
-    decision: 'Aceptada' as 'Aceptada' | 'Aceptada con ajustes' | 'Pendiente' | 'Rechazada',
-    notes: '',
+    presented_at: demo.presented_at
+      ? new Date(demo.presented_at).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16),
+    decision: (demo.client_feedback_decision || 'Aceptada') as 'Aceptada' | 'Aceptada con ajustes' | 'Pendiente' | 'Rechazada',
+    notes: demo.client_feedback_notes || '',
+    agreed_price: demo.agreed_price !== undefined && demo.agreed_price !== null ? String(demo.agreed_price) : '',
+    is_installment: demo.is_installment ?? false,
+    installments_count: demo.installments_count ? String(demo.installments_count) : '2',
+    payment_terms_notes: demo.payment_terms_notes || '',
+    non_acceptance_reason: demo.non_acceptance_reason || '',
   });
 
   const approvalStatus: DemoApprovalStatus = demo.approval_status || 'Borrador';
@@ -233,12 +243,27 @@ export function DemoDetailView({
   // Guardar resultado de presentación
   const handleSavePresentation = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validar: si la decisión no es Aceptada, la razón es obligatoria
+    if (presentationResult.decision !== 'Aceptada' && !presentationResult.non_acceptance_reason.trim()) {
+      alert('Por favor especifica la razón o motivo por el cual el cliente no aceptó la demo directamente.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const priceNum = presentationResult.agreed_price ? parseFloat(presentationResult.agreed_price) : null;
+      const installmentsNum = presentationResult.is_installment ? parseInt(presentationResult.installments_count, 10) || 1 : null;
+
       await recordDemoPresentationResultAction(demo.id, {
         presented_at: new Date(presentationResult.presented_at).toISOString(),
         decision: presentationResult.decision,
         notes: presentationResult.notes,
+        agreed_price: presentationResult.decision === 'Aceptada' ? priceNum : null,
+        is_installment: presentationResult.decision === 'Aceptada' ? presentationResult.is_installment : false,
+        installments_count: presentationResult.decision === 'Aceptada' ? installmentsNum : null,
+        payment_terms_notes: presentationResult.decision === 'Aceptada' ? presentationResult.payment_terms_notes : null,
+        non_acceptance_reason: presentationResult.decision !== 'Aceptada' ? presentationResult.non_acceptance_reason : null,
       });
       alert('Resultado de presentación registrado en CRM.');
     } finally {
@@ -1117,15 +1142,108 @@ export function DemoDetailView({
       {/* PESTAÑA 5: PRESENTACIÓN AL CLIENTE Y RESULTADO */}
       {activeTab === 'feedback' && (
         <div className="space-y-6 text-xs">
+          {/* Tarjeta de Resumen si ya se registró presentación */}
+          {demo.client_feedback_decision && (
+            <div className={`p-4 rounded-2xl border ${
+              demo.client_feedback_decision === 'Aceptada'
+                ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+                : demo.client_feedback_decision === 'Aceptada con ajustes'
+                ? 'bg-sky-950/20 border-sky-500/30 text-sky-200'
+                : demo.client_feedback_decision === 'Pendiente'
+                ? 'bg-amber-950/20 border-amber-500/30 text-amber-200'
+                : 'bg-rose-950/20 border-rose-500/30 text-rose-200'
+            } space-y-3`}>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/60 pb-3">
+                <div className="flex items-center gap-2">
+                  <Presentation className="w-4 h-4" />
+                  <span className="font-bold text-white text-sm">Dictamen Actual del Prospecto</span>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    demo.client_feedback_decision === 'Aceptada'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : demo.client_feedback_decision === 'Aceptada con ajustes'
+                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                      : demo.client_feedback_decision === 'Pendiente'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                  }`}>
+                    {demo.client_feedback_decision}
+                  </span>
+                </div>
+                {demo.presented_at && (
+                  <span className="text-[11px] text-slate-400">
+                    Presentada el {format(parseISO(demo.presented_at), 'd MMM yyyy, HH:mm', { locale: es })}
+                  </span>
+                )}
+              </div>
+
+              {/* Si fue aceptada, mostrar precio acordado y esquema de pago */}
+              {demo.client_feedback_decision === 'Aceptada' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="bg-slate-900/80 border border-emerald-500/20 rounded-xl p-3 space-y-1">
+                    <span className="text-slate-400 text-[11px] flex items-center gap-1 font-medium">
+                      <DollarSign className="w-3.5 h-3.5 text-emerald-400" /> Precio Acordado
+                    </span>
+                    <p className="text-lg font-extrabold text-white">
+                      ${demo.agreed_price ? Number(demo.agreed_price).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'} USD
+                    </p>
+                  </div>
+                  <div className="bg-slate-900/80 border border-emerald-500/20 rounded-xl p-3 space-y-1">
+                    <span className="text-slate-400 text-[11px] flex items-center gap-1 font-medium">
+                      <CreditCard className="w-3.5 h-3.5 text-emerald-400" /> Esquema de Pago
+                    </span>
+                    <p className="text-sm font-semibold text-white">
+                      {demo.is_installment 
+                        ? `En ${demo.installments_count || 2} cuotas / partes` 
+                        : 'Pago al contado'}
+                    </p>
+                    {demo.payment_terms_notes && (
+                      <p className="text-[11px] text-slate-300 italic">{demo.payment_terms_notes}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Si NO fue aceptada, mostrar la razón registrada */}
+              {demo.client_feedback_decision !== 'Aceptada' && demo.non_acceptance_reason && (
+                <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 space-y-1">
+                  <span className="text-slate-400 text-[11px] flex items-center gap-1 font-medium">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    {demo.client_feedback_decision === 'Rechazada' 
+                      ? 'Motivo del Rechazo' 
+                      : demo.client_feedback_decision === 'Pendiente' 
+                      ? 'Razón por la cual queda Pendiente' 
+                      : 'Ajustes Solicitados por el Cliente'}
+                  </span>
+                  <p className="text-white text-xs whitespace-pre-wrap">{demo.non_acceptance_reason}</p>
+                </div>
+              )}
+
+              {/* Botón rápido para convertir a propuesta formal */}
+              {demo.client_feedback_decision === 'Aceptada' && (
+                <div className="pt-2 flex justify-end">
+                  <button
+                    onClick={handleConvertToProposal}
+                    disabled={isConverting}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 transition-all"
+                  >
+                    {isConverting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    Generar Propuesta Comercial con este Precio
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Formulario de registro o actualización de presentación */}
           <form onSubmit={handleSavePresentation} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
             <h3 className="font-bold text-white flex items-center gap-2">
               <Presentation className="w-4 h-4 text-indigo-400" />
-              Resultado de la Presentación de Demo al Prospecto
+              {demo.client_feedback_decision ? 'Actualizar Resultado de la Presentación' : 'Registrar Resultado de Presentación al Prospecto'}
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-300 font-medium mb-1">Fecha de Presentación</label>
+                <label className="block text-slate-300 font-medium mb-1">Fecha y Hora de la Presentación</label>
                 <input
                   type="datetime-local"
                   value={presentationResult.presented_at}
@@ -1140,7 +1258,7 @@ export function DemoDetailView({
                 <select
                   value={presentationResult.decision}
                   onChange={e => setPresentationResult({ ...presentationResult, decision: e.target.value as any })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-semibold"
                 >
                   <option value="Aceptada">Aceptada (Pasa a Propuesta)</option>
                   <option value="Aceptada con ajustes">Aceptada con Ajustes Menores</option>
@@ -1150,11 +1268,122 @@ export function DemoDetailView({
               </div>
             </div>
 
+            {/* SECCIÓN CONDICIONAL 1: PRECIO ACORDADO Y FORMA DE PAGO (Cuando es Aceptada) */}
+            {presentationResult.decision === 'Aceptada' && (
+              <div className="p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-xl space-y-3">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs border-b border-emerald-500/20 pb-2">
+                  <DollarSign className="w-4 h-4" />
+                  <span>Condiciones Económicas Acordadas con el Cliente</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">
+                      Precio Acordado ($ USD) <span className="text-emerald-400">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-slate-400 font-bold">$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="Ej. 1500.00"
+                        value={presentationResult.agreed_price}
+                        onChange={e => setPresentationResult({ ...presentationResult, agreed_price: e.target.value })}
+                        className="w-full bg-slate-950 border border-emerald-500/40 rounded-lg pl-7 pr-3 py-2 text-white font-bold"
+                        required={presentationResult.decision === 'Aceptada'}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Modalidad de Pago</label>
+                    <select
+                      value={presentationResult.is_installment ? 'true' : 'false'}
+                      onChange={e => setPresentationResult({ ...presentationResult, is_installment: e.target.value === 'true' })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    >
+                      <option value="false">Pago al Contado (1 solo pago)</option>
+                      <option value="true">En Partes / Cuotas</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Si es en partes, pedir cuotas y notas */}
+                {presentationResult.is_installment && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-emerald-500/20">
+                    <div>
+                      <label className="block text-slate-300 font-medium mb-1">Número de Cuotas / Partes</label>
+                      <select
+                        value={presentationResult.installments_count}
+                        onChange={e => setPresentationResult({ ...presentationResult, installments_count: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      >
+                        <option value="2">2 partes (ej. 50% / 50%)</option>
+                        <option value="3">3 partes (ej. 40% / 30% / 30%)</option>
+                        <option value="4">4 partes</option>
+                        <option value="5">5 partes</option>
+                        <option value="6">6 partes</option>
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-slate-300 font-medium mb-1">Detalle / Hitos de Pago de las Partes</label>
+                      <input
+                        type="text"
+                        placeholder="Ej. 50% de anticipo al inicio y 50% contra entrega final de software..."
+                        value={presentationResult.payment_terms_notes}
+                        onChange={e => setPresentationResult({ ...presentationResult, payment_terms_notes: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SECCIÓN CONDICIONAL 2: RAZÓN POR LA QUE NO FUE ACEPTADA (Cuando es Rechazada, Pendiente o Aceptada con ajustes) */}
+            {presentationResult.decision !== 'Aceptada' && (
+              <div className={`p-4 rounded-xl border space-y-2 ${
+                presentationResult.decision === 'Rechazada' 
+                  ? 'bg-rose-950/20 border-rose-500/40 text-rose-300' 
+                  : presentationResult.decision === 'Pendiente'
+                  ? 'bg-amber-950/20 border-amber-500/40 text-amber-300'
+                  : 'bg-sky-950/20 border-sky-500/40 text-sky-300'
+              }`}>
+                <label className="block font-bold text-white flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  {presentationResult.decision === 'Rechazada' && 'Razón del Rechazo por el Cliente *'}
+                  {presentationResult.decision === 'Pendiente' && 'Razón por la cual queda Pendiente de Decisión *'}
+                  {presentationResult.decision === 'Aceptada con ajustes' && 'Razón y Ajustes Menores Requeridos *'}
+                </label>
+                <textarea
+                  rows={2}
+                  value={presentationResult.non_acceptance_reason}
+                  onChange={e => setPresentationResult({ ...presentationResult, non_acceptance_reason: e.target.value })}
+                  placeholder={
+                    presentationResult.decision === 'Rechazada'
+                      ? 'Explica detalladamente por qué no aceptó: presupuesto fuera de alcance, prefirieron otra opción, no es su prioridad actual, etc.'
+                      : presentationResult.decision === 'Pendiente'
+                      ? 'Explica qué falta para la decisión final: revisión de directorio, esperar fecha de pago, validar con socios...'
+                      : 'Especifica qué ajustes pidió el cliente antes de la propuesta formal...'
+                  }
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs"
+                  required
+                />
+                <p className="text-[11px] text-slate-400">
+                  {presentationResult.decision === 'Rechazada'
+                    ? '⚠️ Es obligatorio documentar la razón para el análisis de objeciones y métricas comerciales.'
+                    : 'ℹ️ Esta razón quedará registrada en el historial de la demo y las actividades del prospecto.'}
+                </p>
+              </div>
+            )}
+
             <div>
-              <label className="block text-slate-300 font-medium mb-1">Comentarios, Funcionalidades Mostradas y Acuerdos</label>
+              <label className="block text-slate-300 font-medium mb-1">Comentarios Generales y Siguientes Pasos</label>
               <textarea
                 rows={3}
-                placeholder="Detalla qué le gustó al cliente, qué ajustes pidió y cuál es el siguiente paso..."
+                placeholder="Detalla acuerdos de la reunión, impresiones del cliente y próximos pasos acordados..."
                 value={presentationResult.notes}
                 onChange={e => setPresentationResult({ ...presentationResult, notes: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white"
@@ -1166,9 +1395,9 @@ export function DemoDetailView({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold shadow-md"
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold shadow-md transition-colors"
               >
-                Guardar Resultado de Presentación
+                {isSubmitting ? 'Guardando...' : 'Guardar Resultado de Presentación'}
               </button>
             </div>
           </form>

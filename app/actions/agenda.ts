@@ -19,12 +19,12 @@ export async function getAgendaScheduleAction(startDate: string, endDate: string
 
   const robinsonId = adminProfiles?.[0]?.id || null;
 
-  // 2. Obtener bloques de disponibilidad
+  // 2. Obtener bloques de disponibilidad (que se solapen con el intervalo consultado)
   const { data: blocks } = await supabase
     .from('availability_blocks')
     .select('*')
-    .gte('start_time', startDate)
-    .lte('end_time', endDate)
+    .lte('start_time', endDate)
+    .gte('end_time', startDate)
     .order('start_time', { ascending: true });
 
   // 3. Obtener reuniones programadas
@@ -67,6 +67,7 @@ export async function getAgendaScheduleAction(startDate: string, endDate: string
 
 /**
  * Crea un bloque de disponibilidad o un bloqueo de no disponibilidad (solo Admin/Robinson).
+ * Soporta bloqueo de horas específicas, días completos o rangos de fechas.
  */
 export async function createAvailabilityBlockAction(payload: {
   title: string;
@@ -74,7 +75,9 @@ export async function createAvailabilityBlockAction(payload: {
   start_time: string;
   end_time: string;
   is_available: boolean;
+  is_all_day?: boolean;
   notes?: string;
+  target_user_id?: string;
 }) {
   const supabase = createClient();
   const { data: userData } = await supabase.auth.getUser();
@@ -83,17 +86,31 @@ export async function createAvailabilityBlockAction(payload: {
     return { success: false, error: 'Usuario no autenticado.' };
   }
 
+  // Si no se proporcionó target_user_id, resolver al perfil admin (Robinson)
+  let targetUserId = payload.target_user_id || userData.user.id;
+  if (!payload.target_user_id) {
+    const { data: adminProfiles } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', 'admin')
+      .limit(1);
+    if (adminProfiles?.[0]?.id) {
+      targetUserId = adminProfiles[0].id;
+    }
+  }
+
   const { data, error } = await supabase
     .from('availability_blocks')
     .insert([
       {
-        user_id: userData.user.id,
-        title: payload.title,
+        user_id: targetUserId,
+        title: payload.title.trim(),
         slot_type: payload.slot_type,
         start_time: payload.start_time,
         end_time: payload.end_time,
         is_available: payload.is_available,
-        notes: payload.notes || null,
+        is_all_day: payload.is_all_day ?? false,
+        notes: payload.notes?.trim() || null,
       },
     ])
     .select()
@@ -224,6 +241,24 @@ export async function bookMeetingSlotAction(payload: {
           return { success: false, error: 'El horario seleccionado está fuera del horario semanal de disponibilidad configurado.' };
         }
       }
+    }
+
+    // Comprobar bloqueo explícito de no disponibilidad (is_available = false)
+    const { data: blockedBlocks } = await supabase
+      .from('availability_blocks')
+      .select('id, title, notes')
+      .eq('user_id', payload.host_id)
+      .eq('is_available', false)
+      .lt('start_time', payload.end_time)
+      .gt('end_time', payload.start_time)
+      .limit(1);
+
+    if (blockedBlocks && blockedBlocks.length > 0) {
+      const reason = blockedBlocks[0].title || blockedBlocks[0].notes || 'Bloqueo personal / No disponible';
+      return {
+        success: false,
+        error: `⛔ Horario no disponible: Robinson tiene bloqueado este horario (${reason}).`,
+      };
     }
 
     const { data: meetingId, error } = await supabase.rpc('book_meeting_slot', {

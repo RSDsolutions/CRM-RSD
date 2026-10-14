@@ -20,7 +20,12 @@ import {
   FileCheck,
   Search,
   Users,
-  Sparkles
+  Sparkles,
+  Ban,
+  Lock,
+  Coffee,
+  Plane,
+  CalendarDays
 } from 'lucide-react';
 import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -119,16 +124,34 @@ export function AgendaView({ initialRole, userEmail, initialLeadId }: AgendaView
     }
   }, [initialLeadId, scheduleData.leads]);
 
-  // Formulario de Disponibilidad (Admin)
+  // Formulario de Excepción / Bloqueo (Admin)
+  const [blockType, setBlockType] = useState<'hours' | 'day' | 'range' | 'custom_avail'>('hours');
   const [availForm, setAvailForm] = useState({
-    title: 'Disponibilidad Diagnósticos',
-    slot_type: 'Diagnóstico',
+    title: 'Bloqueo Personal',
+    slot_type: 'Bloqueo Personal',
     date: format(new Date(), 'yyyy-MM-dd'),
-    startTime: '09:00',
-    endTime: '12:00',
-    is_available: true,
+    endDate: format(new Date(), 'yyyy-MM-dd'),
+    startTime: '13:00',
+    endTime: '15:00',
+    is_available: false,
     notes: '',
   });
+
+  const openBlockModalForDay = (date: Date, mode: 'hours' | 'day') => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    setBlockType(mode);
+    setAvailForm(prev => ({
+      ...prev,
+      date: dateStr,
+      endDate: dateStr,
+      title: mode === 'day' ? 'Día Bloqueado / No disponible' : 'Bloqueo Personal (Horas)',
+      slot_type: 'Bloqueo Personal',
+      is_available: false,
+      startTime: '13:00',
+      endTime: '15:00',
+    }));
+    setShowBlockModal(true);
+  };
 
   const [weeklyForm, setWeeklyForm] = useState({
     morningStart: '09:00',
@@ -212,23 +235,65 @@ export function AgendaView({ initialRole, userEmail, initialLeadId }: AgendaView
     setSubmitting(true);
     setFeedback(null);
 
-    const startDateTime = new Date(`${availForm.date}T${availForm.startTime}:00`).toISOString();
-    const endDateTime = new Date(`${availForm.date}T${availForm.endTime}:00`).toISOString();
+    let startDateTime: string;
+    let endDateTime: string;
+    let isAvailable = false;
+    let isAllDay = false;
+    let slotType = availForm.slot_type || 'Bloqueo Personal';
+
+    if (blockType === 'hours') {
+      startDateTime = new Date(`${availForm.date}T${availForm.startTime}:00`).toISOString();
+      endDateTime = new Date(`${availForm.date}T${availForm.endTime}:00`).toISOString();
+      isAvailable = false;
+      isAllDay = false;
+    } else if (blockType === 'day') {
+      startDateTime = new Date(`${availForm.date}T00:00:00`).toISOString();
+      endDateTime = new Date(`${availForm.date}T23:59:59.999`).toISOString();
+      isAvailable = false;
+      isAllDay = true;
+    } else if (blockType === 'range') {
+      startDateTime = new Date(`${availForm.date}T00:00:00`).toISOString();
+      endDateTime = new Date(`${availForm.endDate}T23:59:59.999`).toISOString();
+      isAvailable = false;
+      isAllDay = true;
+    } else {
+      // custom_avail
+      startDateTime = new Date(`${availForm.date}T${availForm.startTime}:00`).toISOString();
+      endDateTime = new Date(`${availForm.date}T${availForm.endTime}:00`).toISOString();
+      isAvailable = true;
+      isAllDay = false;
+      slotType = availForm.slot_type || 'Diagnóstico';
+    }
+
+    if (new Date(endDateTime) <= new Date(startDateTime)) {
+      setFeedback({ type: 'error', text: 'La fecha u hora de finalización debe ser posterior a la de inicio.' });
+      setSubmitting(false);
+      return;
+    }
 
     const res = await createAvailabilityBlockAction({
-      title: availForm.title,
-      slot_type: availForm.slot_type,
+      title: availForm.title.trim() || (isAvailable ? 'Disponibilidad Extraordinaria' : isAllDay ? 'Día Bloqueado' : 'Horario Bloqueado'),
+      slot_type: slotType,
       start_time: startDateTime,
       end_time: endDateTime,
-      is_available: availForm.is_available,
+      is_available: isAvailable,
+      is_all_day: isAllDay,
       notes: availForm.notes,
+      target_user_id: scheduleData.robinson?.id,
     });
 
     setSubmitting(false);
     if (!res.success) {
-      setFeedback({ type: 'error', text: res.error || 'Error al guardar bloque.' });
+      setFeedback({ type: 'error', text: res.error || 'Error al guardar la excepción o bloqueo.' });
     } else {
-      setFeedback({ type: 'success', text: 'Bloque de agenda configurado correctamente.' });
+      setFeedback({ 
+        type: 'success', 
+        text: isAvailable 
+          ? '✅ Horario extraordinario habilitado correctamente.' 
+          : isAllDay 
+          ? '✅ Día(s) bloqueado(s) exitosamente en la agenda.' 
+          : '✅ Horario bloqueado exitosamente en la agenda.' 
+      });
       setShowBlockModal(false);
       loadSchedule();
     }
@@ -513,34 +578,113 @@ export function AgendaView({ initialRole, userEmail, initialLeadId }: AgendaView
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
           {weekDays.map((day) => {
+            const dayStart = new Date(day);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(day);
+            dayEnd.setHours(23, 59, 59, 999);
+
             const dayMeetings = scheduleData.meetings.filter(m => isSameDay(parseISO(m.start_time), day));
-            const dayBlocks = scheduleData.blocks.filter(b => isSameDay(parseISO(b.start_time), day));
+            const dayBlocks = scheduleData.blocks.filter(b => {
+              const bStart = parseISO(b.start_time);
+              const bEnd = parseISO(b.end_time);
+              return bStart <= dayEnd && bEnd >= dayStart;
+            });
+            const fullDayBlock = dayBlocks.find(b => 
+              !b.is_available && (
+                b.is_all_day || 
+                (parseISO(b.start_time) <= dayStart && parseISO(b.end_time) >= dayEnd)
+              )
+            );
             const dayWeeklySchedules = scheduleData.weeklySchedules.filter(s => s.day_of_week === (day.getDay() || 7));
             const isToday = isSameDay(day, new Date());
 
             return (
               <div 
                 key={day.toISOString()} 
-                className={`bg-slate-900 border rounded-xl overflow-hidden flex flex-col min-h-[380px] ${
-                  isToday ? 'border-indigo-500/50 shadow-md shadow-indigo-500/10' : 'border-slate-800'
+                className={`bg-slate-900 border rounded-xl overflow-hidden flex flex-col min-h-[400px] ${
+                  fullDayBlock
+                    ? 'border-rose-500/40 bg-rose-950/10'
+                    : isToday 
+                    ? 'border-indigo-500/50 shadow-md shadow-indigo-500/10' 
+                    : 'border-slate-800'
                 }`}
               >
                 {/* Cabecera del día */}
                 <div className={`p-3 text-center border-b border-slate-800 ${
-                  isToday ? 'bg-indigo-600/10 text-indigo-300 font-bold' : 'bg-slate-950/60 text-slate-300'
+                  fullDayBlock
+                    ? 'bg-rose-950/40 text-rose-300'
+                    : isToday 
+                    ? 'bg-indigo-600/10 text-indigo-300' 
+                    : 'bg-slate-950/60 text-slate-300'
                 }`}>
-                  <div className="text-[11px] uppercase tracking-wider font-semibold">
-                    {format(day, 'EEEE', { locale: es })}
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="uppercase tracking-wider font-semibold">
+                      {format(day, 'EEEE', { locale: es })}
+                    </span>
+                    {fullDayBlock && (
+                      <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold text-[9px] flex items-center gap-1 border border-rose-500/30">
+                        <Lock className="w-2.5 h-2.5" /> Bloqueado
+                      </span>
+                    )}
                   </div>
                   <div className="text-sm font-extrabold text-white mt-0.5">
                     {format(day, 'd MMM', { locale: es })}
                   </div>
+
+                  {/* Acciones rápidas de bloqueo para Robinson / Admin */}
+                  {isAdmin && (
+                    <div className="flex items-center justify-center gap-1.5 mt-2 pt-1.5 border-t border-slate-800/60">
+                      <button
+                        onClick={() => openBlockModalForDay(day, 'day')}
+                        className="text-[10px] px-2 py-0.5 rounded bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 transition-colors flex items-center gap-1 border border-slate-700/60"
+                        title="Bloquear este día completo"
+                      >
+                        <Ban className="w-2.5 h-2.5 text-rose-400" />
+                        Bloquear Día
+                      </button>
+                      <button
+                        onClick={() => openBlockModalForDay(day, 'hours')}
+                        className="text-[10px] px-2 py-0.5 rounded bg-slate-800/80 hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-300 transition-colors flex items-center gap-1 border border-slate-700/60"
+                        title="Bloquear horas específicas"
+                      >
+                        <Clock className="w-2.5 h-2.5 text-indigo-400" />
+                        Horas
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Eventos del día */}
                 <div className="p-2 space-y-2 flex-1 overflow-y-auto">
-                  {/* Horario Semanal */}
-                  {dayWeeklySchedules.map(ws => (
+                  {/* Banner de Día Completo Bloqueado */}
+                  {fullDayBlock && (
+                    <div className="p-2.5 bg-rose-950/40 border border-rose-500/30 rounded-xl space-y-1">
+                      <div className="flex items-center justify-between font-bold text-rose-300 text-[11px]">
+                        <span className="flex items-center gap-1">
+                          <Ban className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                          <span className="truncate">{fullDayBlock.title || 'Día No Disponible'}</span>
+                        </span>
+                        {isAdmin && (
+                          <button
+                            onClick={() => deleteAvailabilityBlockAction(fullDayBlock.id).then(loadSchedule)}
+                            className="text-slate-500 hover:text-rose-300 text-xs p-0.5"
+                            title="Desbloquear este día"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      {fullDayBlock.notes && (
+                        <p className="text-[10px] text-slate-300 italic truncate">{fullDayBlock.notes}</p>
+                      )}
+                      <p className="text-[9px] text-rose-400/90 font-medium">
+                        ⛔ Sin disponibilidad para reservas hoy
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Horario Semanal Habitual (Solo si el día no está totalmente bloqueado) */}
+                  {!fullDayBlock && dayWeeklySchedules.map(ws => (
                     <div key={ws.id} className="p-2 rounded-lg text-[11px] border bg-emerald-500/5 border-emerald-500/10 text-emerald-400">
                       <div className="font-semibold flex items-center justify-between">
                         <span>Horario Disponible</span>
@@ -552,31 +696,44 @@ export function AgendaView({ initialRole, userEmail, initialLeadId }: AgendaView
                     </div>
                   ))}
 
-                  {/* Bloques de disponibilidad / Bloqueos */}
-                  {dayBlocks.map(block => (
+                  {/* Bloques de Excepción y Bloqueos por Horas */}
+                  {dayBlocks.filter(b => b.id !== fullDayBlock?.id).map(block => (
                     <div 
                       key={block.id}
                       className={`p-2 rounded-lg text-[11px] border ${
                         block.is_available 
                           ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' 
-                          : 'bg-slate-800/80 border-slate-700 text-slate-400'
+                          : 'bg-rose-950/30 border-rose-500/30 text-rose-200'
                       }`}
                     >
                       <div className="font-semibold flex items-center justify-between">
-                        <span>{block.is_available ? block.title : 'No disponible'}</span>
+                        <span className="flex items-center gap-1 truncate">
+                          {block.is_available ? (
+                            <Sparkles className="w-3 h-3 text-emerald-400 shrink-0" />
+                          ) : (
+                            <Ban className="w-3 h-3 text-rose-400 shrink-0" />
+                          )}
+                          <span className="truncate">{block.title || (block.is_available ? 'Horario Extra' : 'Bloqueado')}</span>
+                        </span>
                         {isAdmin && (
                           <button
                             onClick={() => deleteAvailabilityBlockAction(block.id).then(loadSchedule)}
-                            className="text-slate-500 hover:text-rose-400"
-                            title="Eliminar bloque"
+                            className="text-slate-500 hover:text-rose-400 ml-1 shrink-0"
+                            title="Eliminar bloqueo"
                           >
                             ✕
                           </button>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
+                      <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5 text-slate-500" />
                         {format(parseISO(block.start_time), 'HH:mm')} - {format(parseISO(block.end_time), 'HH:mm')}
                       </div>
+                      {block.notes && (
+                        <div className="text-[9px] text-slate-400 mt-0.5 truncate">
+                          {block.notes}
+                        </div>
+                      )}
                     </div>
                   ))}
 
@@ -621,7 +778,7 @@ export function AgendaView({ initialRole, userEmail, initialLeadId }: AgendaView
                     </div>
                   ))}
 
-                  {dayMeetings.length === 0 && dayBlocks.length === 0 && (
+                  {dayMeetings.length === 0 && dayBlocks.length === 0 && !fullDayBlock && dayWeeklySchedules.length === 0 && (
                     <div className="h-full flex flex-col items-center justify-center text-center p-4">
                       <Clock className="w-5 h-5 text-slate-700 mb-1" />
                       <span className="text-[11px] text-slate-600">Sin bloques ni citas</span>
@@ -631,13 +788,20 @@ export function AgendaView({ initialRole, userEmail, initialLeadId }: AgendaView
 
                 {/* Botón rápido para reservar en este día */}
                 <div className="p-2 border-t border-slate-800 bg-slate-950/40">
-                  <button
-                    onClick={() => openBookingForSlot(day, '10:00')}
-                    className="w-full py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium transition-colors flex items-center justify-center gap-1"
-                  >
-                    <Plus className="w-3 h-3 text-indigo-400" />
-                    Reservar Cita
-                  </button>
+                  {fullDayBlock ? (
+                    <div className="w-full py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-500 text-[10px] font-semibold text-center flex items-center justify-center gap-1">
+                      <Lock className="w-3 h-3 text-rose-400/70" />
+                      Día No Disponible
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => openBookingForSlot(day, '10:00')}
+                      className="w-full py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium transition-colors flex items-center justify-center gap-1"
+                    >
+                      <Plus className="w-3 h-3 text-indigo-400" />
+                      Reservar Cita
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -645,107 +809,305 @@ export function AgendaView({ initialRole, userEmail, initialLeadId }: AgendaView
         </div>
       )}
 
-      {/* MODAL: DEFINIR DISPONIBILIDAD / BLOQUEO (Admin) */}
+      {/* MODAL: DEFINIR EXCEPCIÓN / BLOQUEO (Admin) */}
       {showBlockModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-violet-400" />
-                Definir Disponibilidad de Robinson
-              </h2>
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-white">
+                    Definir Excepción o Bloqueo en la Agenda
+                  </h2>
+                  <p className="text-[11px] text-slate-400">
+                    Bloquea horas, días completos o periodos para evitar reservas no deseadas.
+                  </p>
+                </div>
+              </div>
               <button onClick={() => setShowBlockModal(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
+            {/* Selector de Modo: Horas | Día Completo | Rango Días | Horas Extra */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800 text-[11px]">
+              <button
+                type="button"
+                onClick={() => {
+                  setBlockType('hours');
+                  setAvailForm(prev => ({
+                    ...prev,
+                    title: prev.title === 'Día Bloqueado / No disponible' || prev.title === 'Vacaciones / Feriado' ? 'Bloqueo Personal (Horas)' : prev.title,
+                    is_available: false,
+                  }));
+                }}
+                className={`py-2 px-2 rounded-lg font-semibold flex items-center justify-center gap-1 transition-all ${
+                  blockType === 'hours'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Horas</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setBlockType('day');
+                  setAvailForm(prev => ({
+                    ...prev,
+                    title: 'Día Bloqueado / No disponible',
+                    is_available: false,
+                  }));
+                }}
+                className={`py-2 px-2 rounded-lg font-semibold flex items-center justify-center gap-1 transition-all ${
+                  blockType === 'day'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <Ban className="w-3.5 h-3.5" />
+                <span>Día Entero</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setBlockType('range');
+                  setAvailForm(prev => ({
+                    ...prev,
+                    title: 'Vacaciones / Feriado',
+                    is_available: false,
+                  }));
+                }}
+                className={`py-2 px-2 rounded-lg font-semibold flex items-center justify-center gap-1 transition-all ${
+                  blockType === 'range'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <CalendarDays className="w-3.5 h-3.5" />
+                <span>Varios Días</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setBlockType('custom_avail');
+                  setAvailForm(prev => ({
+                    ...prev,
+                    title: 'Disponibilidad Extra',
+                    is_available: true,
+                    slot_type: 'Diagnóstico',
+                  }));
+                }}
+                className={`py-2 px-2 rounded-lg font-semibold flex items-center justify-center gap-1 transition-all ${
+                  blockType === 'custom_avail'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Horas Extra</span>
+              </button>
+            </div>
+
+            {/* Presets rápidos de motivos */}
+            {blockType !== 'custom_avail' && (
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-slate-400 font-medium">Motivos frecuentes (haz clic para auto-completar):</span>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setAvailForm(prev => ({ ...prev, title: 'Almuerzo / Receso', startTime: '13:00', endTime: '15:00' }))}
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] flex items-center gap-1 border border-slate-700/60"
+                  >
+                    <Coffee className="w-3 h-3 text-amber-400" /> Almuerzo (13h-15h)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAvailForm(prev => ({ ...prev, title: 'Cita Médica / Personal' }))}
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] flex items-center gap-1 border border-slate-700/60"
+                  >
+                    🏥 Cita Médica
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAvailForm(prev => ({ ...prev, title: 'Viaje de Negocios' }))}
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] flex items-center gap-1 border border-slate-700/60"
+                  >
+                    <Plane className="w-3 h-3 text-sky-400" /> Viaje
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAvailForm(prev => ({ ...prev, title: 'Vacaciones / Feriado' }))}
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] flex items-center gap-1 border border-slate-700/60"
+                  >
+                    🏖️ Vacaciones / Feriado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAvailForm(prev => ({ ...prev, title: 'Reunión Interna / Desarrollo' }))}
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] flex items-center gap-1 border border-slate-700/60"
+                  >
+                    💻 Desarrollo Interno
+                  </button>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSaveAvailability} className="space-y-4 text-xs">
               <div>
-                <label className="block text-slate-300 font-medium mb-1">Título del Bloque</label>
+                <label className="block text-slate-300 font-medium mb-1">Título o Motivo</label>
                 <input
                   type="text"
                   value={availForm.title}
                   onChange={e => setAvailForm({ ...availForm, title: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  placeholder={blockType === 'custom_avail' ? 'Ej. Disponibilidad Sábado Mañana' : 'Ej. Almuerzo, Viaje, Asunto personal...'}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-medium"
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* SELECCIÓN DE FECHAS SEGÚN EL MODO */}
+              {blockType === 'range' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Fecha Desde (Inicio)</label>
+                    <input
+                      type="date"
+                      value={availForm.date}
+                      onChange={e => setAvailForm({ ...availForm, date: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Fecha Hasta (Fin)</label>
+                    <input
+                      type="date"
+                      value={availForm.endDate}
+                      min={availForm.date}
+                      onChange={e => setAvailForm({ ...availForm, endDate: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      required
+                    />
+                  </div>
+                </div>
+              ) : (
                 <div>
-                  <label className="block text-slate-300 font-medium mb-1">Tipo de Actividad</label>
+                  <label className="block text-slate-300 font-medium mb-1">Fecha</label>
+                  <input
+                    type="date"
+                    value={availForm.date}
+                    onChange={e => setAvailForm({ ...availForm, date: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    required
+                  />
+                </div>
+              )}
+
+              {/* SELECCIÓN DE HORAS (Solo si es 'hours' o 'custom_avail') */}
+              {(blockType === 'hours' || blockType === 'custom_avail') && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Hora Inicio</label>
+                    <input
+                      type="time"
+                      value={availForm.startTime}
+                      onChange={e => setAvailForm({ ...availForm, startTime: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Hora Fin</label>
+                    <input
+                      type="time"
+                      value={availForm.endTime}
+                      onChange={e => setAvailForm({ ...availForm, endTime: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* TIPO DE ACTIVIDAD SI ES HABILITACIÓN EXTRA */}
+              {blockType === 'custom_avail' && (
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Tipo de Actividad Permitida</label>
                   <select
                     value={availForm.slot_type}
                     onChange={e => setAvailForm({ ...availForm, slot_type: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
                   >
                     <option value="Diagnóstico">Diagnóstico (30 min)</option>
-                    <option value="Presentación Demo">Presentación Demo</option>
-                    <option value="General">Horario General Libre</option>
-                    <option value="Bloqueo Personal">Bloqueo Personal (No disponible)</option>
-                    <option value="Reunión Interna">Reunión Interna / Desarrollo</option>
+                    <option value="Presentación Demo">Presentación de Demo</option>
+                    <option value="General">Horario General Disponible</option>
                   </select>
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Estado</label>
-                  <select
-                    value={availForm.is_available ? 'true' : 'false'}
-                    onChange={e => setAvailForm({ ...availForm, is_available: e.target.value === 'true' })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                  >
-                    <option value="true">Disponible para reservas</option>
-                    <option value="false">Bloqueado (No disponible)</option>
-                  </select>
-                </div>
+              {/* AVISO EXPLICATIVO */}
+              <div className={`p-3 rounded-xl border text-[11px] ${
+                blockType === 'custom_avail'
+                  ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
+                  : 'bg-rose-950/20 border-rose-500/30 text-rose-300'
+              }`}>
+                {blockType === 'hours' && (
+                  <p>🚫 Se bloqueará este rango horario. El sistema rechazará cualquier intento de reserva en estas horas.</p>
+                )}
+                {blockType === 'day' && (
+                  <p>⛔ Se bloqueará todo el día seleccionado (00:00 - 23:59). Ningún asesor podrá agendar reuniones en esta fecha.</p>
+                )}
+                {blockType === 'range' && (
+                  <p>🗓️ Se bloquearán todos los días entre la fecha de inicio y fin. Ideal para vacaciones, viajes o periodos de descanso.</p>
+                )}
+                {blockType === 'custom_avail' && (
+                  <p>✨ Se abrirá disponibilidad extraordinaria en la agenda fuera del horario base recurrente.</p>
+                )}
               </div>
 
               <div>
-                <label className="block text-slate-300 font-medium mb-1">Fecha</label>
+                <label className="block text-slate-300 font-medium mb-1">Notas Internas (Opcional)</label>
                 <input
-                  type="date"
-                  value={availForm.date}
-                  onChange={e => setAvailForm({ ...availForm, date: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                  required
+                  type="text"
+                  placeholder="Detalles adicionales o recordatorio para el equipo..."
+                  value={availForm.notes}
+                  onChange={e => setAvailForm({ ...availForm, notes: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Hora Inicio</label>
-                  <input
-                    type="time"
-                    value={availForm.startTime}
-                    onChange={e => setAvailForm({ ...availForm, startTime: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Hora Fin</label>
-                  <input
-                    type="time"
-                    value={availForm.endTime}
-                    onChange={e => setAvailForm({ ...availForm, endTime: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                    required
-                  />
-                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowBlockModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold disabled:opacity-50"
+                  className={`px-5 py-2 rounded-xl font-bold text-white shadow-md transition-all disabled:opacity-50 ${
+                    blockType === 'custom_avail'
+                      ? 'bg-emerald-600 hover:bg-emerald-500'
+                      : 'bg-rose-600 hover:bg-rose-500'
+                  }`}
                 >
-                  {submitting ? 'Guardando...' : 'Guardar Bloque'}
+                  {submitting 
+                    ? 'Guardando...' 
+                    : blockType === 'custom_avail' 
+                    ? 'Habilitar Disponibilidad' 
+                    : blockType === 'day' 
+                    ? 'Bloquear Día Completo' 
+                    : blockType === 'range' 
+                    ? 'Bloquear Periodo' 
+                    : 'Bloquear Horas'}
                 </button>
               </div>
             </form>

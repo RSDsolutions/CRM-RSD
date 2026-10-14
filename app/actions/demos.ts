@@ -299,20 +299,34 @@ export async function recordDemoPresentationResultAction(
     decision: 'Aceptada' | 'Aceptada con ajustes' | 'Pendiente' | 'Rechazada';
     notes: string;
     next_step?: string;
+    agreed_price?: number | null;
+    is_installment?: boolean;
+    installments_count?: number | null;
+    payment_terms_notes?: string | null;
+    non_acceptance_reason?: string | null;
   }
 ) {
   const supabase = createClient();
 
+  const isAccepted = payload.decision === 'Aceptada';
+
+  const updateData: Record<string, any> = {
+    presented_at: payload.presented_at,
+    status: payload.decision === 'Aceptada' || payload.decision === 'Aceptada con ajustes' ? 'Interesado' : 'Presentada',
+    client_feedback_decision: payload.decision,
+    client_feedback_notes: payload.notes.trim(),
+    client_feedback_date: new Date().toISOString(),
+    agreed_price: isAccepted ? (payload.agreed_price !== undefined ? payload.agreed_price : null) : null,
+    is_installment: isAccepted ? (payload.is_installment ?? false) : false,
+    installments_count: isAccepted && payload.is_installment ? (payload.installments_count || 1) : null,
+    payment_terms_notes: isAccepted && payload.is_installment ? (payload.payment_terms_notes?.trim() || null) : null,
+    non_acceptance_reason: !isAccepted ? (payload.non_acceptance_reason?.trim() || null) : null,
+    updated_at: new Date().toISOString(),
+  };
+
   const { data: demo, error } = await supabase
     .from('demos')
-    .update({
-      presented_at: payload.presented_at,
-      status: payload.decision === 'Aceptada' || payload.decision === 'Aceptada con ajustes' ? 'Interesado' : 'Presentada',
-      client_feedback_decision: payload.decision,
-      client_feedback_notes: payload.notes.trim(),
-      client_feedback_date: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq('id', demoId)
     .select()
     .single();
@@ -320,13 +334,27 @@ export async function recordDemoPresentationResultAction(
   if (error) return { success: false, error: error.message };
 
   if (demo?.lead_id) {
+    let summaryText = `Presentación de demo: Decisión del cliente: ${payload.decision}`;
+    if (isAccepted) {
+      if (payload.agreed_price) {
+        summaryText += ` | Precio acordado: $${payload.agreed_price} USD`;
+        if (payload.is_installment) {
+          summaryText += ` (En ${payload.installments_count || 1} cuotas)`;
+        } else {
+          summaryText += ` (Pago al contado)`;
+        }
+      }
+    } else if (payload.non_acceptance_reason) {
+      summaryText += ` | Motivo: ${payload.non_acceptance_reason}`;
+    }
+
     await supabase.from('activities').insert([
       {
         lead_id: demo.lead_id,
         activity_type: 'Presentación demo',
-        summary: `Presentación de demo: Decisión del cliente: ${payload.decision}`,
-        result: payload.notes,
-        next_step: payload.next_step || 'Preparar propuesta o ajustes',
+        summary: summaryText,
+        result: payload.notes + (payload.non_acceptance_reason ? ` | Razón: ${payload.non_acceptance_reason}` : ''),
+        next_step: payload.next_step || (isAccepted ? 'Generar propuesta formal con precio acordado' : 'Seguimiento o ajustes'),
         visibility: 'Interno',
         status: 'Realizada',
       },
@@ -354,6 +382,13 @@ export async function convertDemoToProposalAction(demoId: string): Promise<strin
   const year = new Date().getFullYear();
   const proposalNumber = `RSD-PROP-${year}-${String((seq as any) || 1).padStart(3, '0')}`;
 
+  const agreedAmount = demo.agreed_price ? Number(demo.agreed_price) : 0;
+  const commercialTerms = demo.is_installment
+    ? `Forma de pago acordada: En ${demo.installments_count || 2} cuotas.${demo.payment_terms_notes ? ` Detalle: ${demo.payment_terms_notes}` : ''}`
+    : agreedAmount > 0
+    ? 'Forma de pago acordada: Pago al contado.'
+    : undefined;
+
   const { data: proposal, error: propError } = await supabase
     .from('proposals')
     .insert([
@@ -366,7 +401,11 @@ export async function convertDemoToProposalAction(demoId: string): Promise<strin
         scope_summary:   demo.description || demo.objective,
         deliverables:    demo.modules_included ? [demo.modules_included] : ['Software funcional a medida'],
         status:          'Borrador',
-        amount:          0,
+        amount:          agreedAmount,
+        price:           agreedAmount,
+        base_amount:     agreedAmount,
+        total:           agreedAmount,
+        commercial_terms: commercialTerms,
       },
     ])
     .select()
