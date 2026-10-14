@@ -25,7 +25,8 @@ import {
   Lock,
   Coffee,
   Plane,
-  CalendarDays
+  CalendarDays,
+  LayoutGrid
 } from 'lucide-react';
 import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -75,6 +76,7 @@ export function AgendaView({ initialRole, userEmail, initialLeadId }: AgendaView
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showOutcomeModal, setShowOutcomeModal] = useState<Meeting | null>(null);
   const [selectedSlotTime, setSelectedSlotTime] = useState<string>('');
+  const [calendarViewMode, setCalendarViewMode] = useState<'grid' | 'cards'>('grid');
 
   // Modo de asociación de reunión: con lead existente, sin lead (general), o prospecto manual
   const [meetingTargetMode, setMeetingTargetMode] = useState<'lead' | 'none' | 'manual'>('lead');
@@ -162,6 +164,46 @@ export function AgendaView({ initialRole, userEmail, initialLeadId }: AgendaView
   });
 
   const weekDays = Array.from({ length: 6 }, (_, i) => addDays(currentWeekStart, i)); // Lunes a Sábado
+
+  // Configuración de la cuadrícula de 30 minutos (08:00 a 20:00)
+  const START_HOUR = 8;
+  const END_HOUR = 20;
+  const SLOT_HEIGHT = 44; // Altura en px por cada intervalo de 30 minutos
+  const TOTAL_SLOTS = (END_HOUR - START_HOUR) * 2; // 24 medias horas
+
+  const timeSlots = Array.from({ length: TOTAL_SLOTS }, (_, i) => {
+    const totalMinutes = START_HOUR * 60 + i * 30;
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    const isHour = m === 0;
+    return { timeStr, isHour, totalMinutes };
+  });
+
+  const getEventPosition = (startTimeStr: string, endTimeStr: string, dayDate: Date) => {
+    const start = parseISO(startTimeStr);
+    const end = parseISO(endTimeStr);
+
+    const dayStartZero = new Date(dayDate);
+    dayStartZero.setHours(START_HOUR, 0, 0, 0);
+
+    const dayEndZero = new Date(dayDate);
+    dayEndZero.setHours(END_HOUR, 0, 0, 0);
+
+    const clampedStart = Math.max(start.getTime(), dayStartZero.getTime());
+    const clampedEnd = Math.min(end.getTime(), dayEndZero.getTime());
+
+    if (clampedEnd <= clampedStart) return null;
+
+    const startMinutes = (clampedStart - dayStartZero.getTime()) / (1000 * 60);
+    const durationMinutes = (clampedEnd - clampedStart) / (1000 * 60);
+
+    const pxPerMinute = SLOT_HEIGHT / 30;
+    const top = startMinutes * pxPerMinute;
+    const height = Math.max(durationMinutes * pxPerMinute, 24);
+
+    return { top, height };
+  };
 
   const loadSchedule = async () => {
     setLoading(true);
@@ -529,53 +571,463 @@ export function AgendaView({ initialRole, userEmail, initialLeadId }: AgendaView
         </div>
       )}
 
-      {/* Navegación de Semana */}
-      <div className="flex items-center justify-between bg-slate-900/60 border border-slate-800 px-4 py-3 rounded-xl">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handlePrevWeek}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleCurrentWeek}
-            className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition-colors"
-          >
-            Esta Semana
-          </button>
-          <button
-            onClick={handleNextWeek}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+      {/* Navegación de Semana y Controles de Vista */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-900/60 border border-slate-800 p-4 rounded-xl">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handlePrevWeek}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+              title="Semana anterior"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleCurrentWeek}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition-colors"
+            >
+              Esta Semana
+            </button>
+            <button
+              onClick={handleNextWeek}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+              title="Semana siguiente"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <span className="text-sm font-bold text-white capitalize">
+            {format(currentWeekStart, "MMMM yyyy", { locale: es })} — Semana del {format(currentWeekStart, "d 'de' MMMM", { locale: es })}
+          </span>
         </div>
 
-        <span className="text-xs font-bold text-white capitalize">
-          {format(currentWeekStart, "MMMM yyyy", { locale: es })} — Semana del {format(currentWeekStart, "d 'de' MMMM", { locale: es })}
-        </span>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Selector de Modo de Vista */}
+          <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+            <button
+              onClick={() => setCalendarViewMode('grid')}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                calendarViewMode === 'grid'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Cuadrícula 30 min</span>
+            </button>
+            <button
+              onClick={() => setCalendarViewMode('cards')}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                calendarViewMode === 'cards'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Resumen por Día</span>
+            </button>
+          </div>
 
-        <div className="flex items-center gap-3 text-[11px] text-slate-400">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Disponible
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Cita Reservada
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-slate-600" /> Bloqueado
-          </span>
+          {/* Leyenda de Colores */}
+          <div className="flex flex-wrap items-center gap-2.5 text-[10px] text-slate-400 font-medium">
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]" /> Disponible
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_6px_rgba(99,102,241,0.5)]" /> Cita Reservada
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.5)]" /> Bloqueado / Almuerzo
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Calendario Semanal */}
       {loading ? (
-        <div className="flex items-center justify-center p-16 bg-slate-900 border border-slate-800 rounded-2xl">
+        <div className="flex items-center justify-center p-20 bg-slate-900 border border-slate-800 rounded-2xl">
           <Loader2 className="w-6 h-6 animate-spin text-indigo-400 mr-3" />
-          <span className="text-xs text-slate-400">Cargando disponibilidad de la agenda...</span>
+          <span className="text-xs text-slate-400">Cargando disponibilidad y citas de la agenda...</span>
+        </div>
+      ) : calendarViewMode === 'grid' ? (
+        /* VISTA 1: CUADRÍCULA PROFESIONAL POR MEDIAS HORAS (30 min) */
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+          {/* Header con las columnas de los días */}
+          <div className="flex border-b border-slate-800 bg-slate-950/90 sticky top-0 z-40 backdrop-blur-md">
+            {/* Celda de esquina superior izquierda (Hora) */}
+            <div className="w-16 sm:w-20 shrink-0 p-3 border-r border-slate-800 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-center">
+              Hora
+            </div>
+
+            {/* Columnas de los 6 días */}
+            <div className="grid grid-cols-6 flex-1 divide-x divide-slate-800">
+              {weekDays.map(day => {
+                const isToday = isSameDay(day, new Date());
+                const dayStart = new Date(day);
+                dayStart.setHours(0, 0, 0, 0);
+                const dayEnd = new Date(day);
+                dayEnd.setHours(23, 59, 59, 999);
+                const dayBlocks = scheduleData.blocks.filter(b => {
+                  const bStart = parseISO(b.start_time);
+                  const bEnd = parseISO(b.end_time);
+                  return bStart <= dayEnd && bEnd >= dayStart;
+                });
+                const fullDayBlock = dayBlocks.find(b =>
+                  !b.is_available && (
+                    b.is_all_day ||
+                    (parseISO(b.start_time) <= dayStart && parseISO(b.end_time) >= dayEnd)
+                  )
+                );
+
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className={`p-2.5 text-center transition-colors ${
+                      fullDayBlock
+                        ? 'bg-rose-950/40 text-rose-300'
+                        : isToday
+                        ? 'bg-indigo-600/10 text-indigo-300'
+                        : 'bg-transparent text-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="uppercase tracking-wider font-semibold">
+                        {format(day, 'EEE', { locale: es })}
+                      </span>
+                      {fullDayBlock && (
+                        <span className="px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 font-bold text-[9px] flex items-center gap-0.5 border border-rose-500/30">
+                          <Lock className="w-2.5 h-2.5" /> Bloqueado
+                        </span>
+                      )}
+                      {isToday && !fullDayBlock && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                      )}
+                    </div>
+                    <div className="text-sm font-extrabold text-white mt-0.5">
+                      {format(day, 'd MMM', { locale: es })}
+                    </div>
+
+                    {isAdmin && (
+                      <div className="flex items-center justify-center gap-1 mt-1.5">
+                        <button
+                          onClick={() => openBlockModalForDay(day, 'day')}
+                          className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/90 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 transition-colors flex items-center gap-0.5 border border-slate-700/60"
+                          title="Bloquear día completo"
+                        >
+                          <Ban className="w-2.5 h-2.5 text-rose-400" />
+                          Bloquear
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Contenedor vertical scrolleable de las 24 medias horas (08:00 a 20:00) */}
+          <div className="flex overflow-y-auto max-h-[660px] relative">
+            {/* Columna vertical de horas (Y-Axis) */}
+            <div className="w-16 sm:w-20 shrink-0 border-r border-slate-800 bg-slate-950/60 select-none">
+              {timeSlots.map((slot) => (
+                <div
+                  key={slot.timeStr}
+                  style={{ height: `${SLOT_HEIGHT}px` }}
+                  className={`flex items-start justify-end pr-2 text-right border-b ${
+                    slot.isHour ? 'border-slate-800/80' : 'border-slate-800/30'
+                  }`}
+                >
+                  <span
+                    className={`-mt-2 font-mono ${
+                      slot.isHour ? 'text-[11px] font-bold text-slate-300' : 'text-[9px] font-medium text-slate-500'
+                    }`}
+                  >
+                    {slot.timeStr}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* 6 Columnas de Días con rejilla de 30 min y eventos absolutos */}
+            <div className="grid grid-cols-6 flex-1 divide-x divide-slate-800 relative">
+              {weekDays.map(day => {
+                const dayStart = new Date(day);
+                dayStart.setHours(0, 0, 0, 0);
+                const dayEnd = new Date(day);
+                dayEnd.setHours(23, 59, 59, 999);
+
+                const dayMeetings = scheduleData.meetings.filter(m => isSameDay(parseISO(m.start_time), day));
+                const dayBlocks = scheduleData.blocks.filter(b => {
+                  const bStart = parseISO(b.start_time);
+                  const bEnd = parseISO(b.end_time);
+                  return bStart <= dayEnd && bEnd >= dayStart;
+                });
+                const fullDayBlock = dayBlocks.find(b =>
+                  !b.is_available && (
+                    b.is_all_day ||
+                    (parseISO(b.start_time) <= dayStart && parseISO(b.end_time) >= dayEnd)
+                  )
+                );
+                const dayWeeklySchedules = scheduleData.weeklySchedules.filter(s => s.day_of_week === (day.getDay() || 7));
+                const isToday = isSameDay(day, new Date());
+
+                // Posición de la línea de hora actual
+                const now = new Date();
+                const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                const isCurrentTimeVisible =
+                  isToday && currentMinutes >= START_HOUR * 60 && currentMinutes <= END_HOUR * 60;
+                const currentTop = isCurrentTimeVisible
+                  ? (currentMinutes - START_HOUR * 60) * (SLOT_HEIGHT / 30)
+                  : null;
+
+                return (
+                  <div
+                    key={day.toISOString()}
+                    style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px` }}
+                    className={`relative select-none ${
+                      fullDayBlock ? 'bg-rose-950/15' : isToday ? 'bg-indigo-950/5' : 'bg-transparent'
+                    }`}
+                  >
+                    {/* Ranuras interactivas de 30 minutos de fondo */}
+                    {timeSlots.map((slot) => {
+                      const slotMinute = slot.totalMinutes;
+                      const inWeeklySchedule = dayWeeklySchedules.some(ws => {
+                        const [sH, sM] = ws.start_time.split(':').map(Number);
+                        const [eH, eM] = ws.end_time.split(':').map(Number);
+                        const wsStart = sH * 60 + sM;
+                        const wsEnd = eH * 60 + eM;
+                        return slotMinute >= wsStart && slotMinute + 30 <= wsEnd;
+                      });
+
+                      return (
+                        <div
+                          key={slot.timeStr}
+                          style={{ height: `${SLOT_HEIGHT}px` }}
+                          onClick={() => {
+                            if (fullDayBlock) return;
+                            openBookingForSlot(day, slot.timeStr);
+                          }}
+                          className={`border-b transition-colors group relative cursor-pointer ${
+                            slot.isHour ? 'border-slate-800/80' : 'border-slate-800/30'
+                          } ${
+                            fullDayBlock
+                              ? 'cursor-not-allowed'
+                              : inWeeklySchedule
+                              ? 'bg-emerald-500/[0.03] hover:bg-emerald-500/[0.14]'
+                              : 'bg-slate-950/20 hover:bg-slate-800/40'
+                          }`}
+                        >
+                          {/* Indicador en hover para reservar en esta media hora */}
+                          {!fullDayBlock && (
+                            <div className="opacity-0 group-hover:opacity-100 absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-indigo-300 pointer-events-none transition-opacity bg-indigo-500/10">
+                              <Plus className="w-3 h-3 mr-0.5 text-indigo-400" />
+                              {slot.timeStr}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Línea indicadora de hora actual */}
+                    {currentTop !== null && (
+                      <div
+                        style={{ top: `${currentTop}px` }}
+                        className="absolute left-0 right-0 z-30 pointer-events-none flex items-center"
+                      >
+                        <div className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,1)] -ml-1" />
+                        <div className="flex-1 h-[2px] bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)]" />
+                      </div>
+                    )}
+
+                    {/* Capa de Eventos en su posición exacta */}
+                    {!fullDayBlock && (
+                      <div className="absolute inset-0 pointer-events-none">
+                        {/* 1. Bloqueos de No Disponibilidad / Almuerzo / Personal (is_available = false) */}
+                        {dayBlocks
+                          .filter(b => !b.is_available && !b.is_all_day)
+                          .map(block => {
+                            const pos = getEventPosition(block.start_time, block.end_time, day);
+                            if (!pos) return null;
+                            return (
+                              <div
+                                key={block.id}
+                                style={{
+                                  top: `${pos.top}px`,
+                                  height: `${pos.height}px`,
+                                }}
+                                className="absolute left-1 right-1 pointer-events-auto rounded-lg bg-rose-950/90 hover:bg-rose-900 border-l-4 border-l-rose-400 border border-rose-600/50 text-rose-100 p-1.5 shadow-md flex flex-col justify-between overflow-hidden transition-all group z-20"
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between text-[10px] font-bold text-rose-300">
+                                    <span className="flex items-center gap-1 truncate">
+                                      <Ban className="w-3 h-3 text-rose-400 shrink-0" />
+                                      <span className="truncate">{block.title || 'Horario Bloqueado'}</span>
+                                    </span>
+                                    {isAdmin && (
+                                      <button
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          deleteAvailabilityBlockAction(block.id).then(loadSchedule);
+                                        }}
+                                        className="text-rose-400 hover:text-white p-0.5 transition-colors"
+                                        title="Eliminar bloqueo"
+                                      >
+                                        ✕
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="text-[9px] text-rose-200/80 font-mono mt-0.5">
+                                    {format(parseISO(block.start_time), 'HH:mm')} - {format(parseISO(block.end_time), 'HH:mm')}
+                                  </div>
+                                </div>
+                                {pos.height > 50 && block.notes && (
+                                  <p className="text-[9px] text-slate-300 italic truncate mt-1">{block.notes}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+
+                        {/* 2. Horas Extraordinarias (is_available = true) */}
+                        {dayBlocks
+                          .filter(b => b.is_available)
+                          .map(block => {
+                            const pos = getEventPosition(block.start_time, block.end_time, day);
+                            if (!pos) return null;
+                            return (
+                              <div
+                                key={block.id}
+                                style={{
+                                  top: `${pos.top}px`,
+                                  height: `${pos.height}px`,
+                                }}
+                                className="absolute left-1 right-1 pointer-events-auto rounded-lg bg-emerald-950/80 hover:bg-emerald-900/80 border-l-4 border-l-emerald-400 border border-emerald-600/50 text-emerald-100 p-1.5 shadow-md flex flex-col justify-between overflow-hidden transition-all z-10"
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between text-[10px] font-bold text-emerald-300">
+                                    <span className="flex items-center gap-1 truncate">
+                                      <Sparkles className="w-3 h-3 text-emerald-400 shrink-0" />
+                                      <span className="truncate">{block.title || 'Horario Extra'}</span>
+                                    </span>
+                                    {isAdmin && (
+                                      <button
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          deleteAvailabilityBlockAction(block.id).then(loadSchedule);
+                                        }}
+                                        className="text-emerald-400 hover:text-white p-0.5"
+                                        title="Eliminar"
+                                      >
+                                        ✕
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="text-[9px] text-emerald-300/80 font-mono">
+                                    {format(parseISO(block.start_time), 'HH:mm')} - {format(parseISO(block.end_time), 'HH:mm')}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                        {/* 3. Reuniones Agendadas (Meetings) */}
+                        {dayMeetings.map(meeting => {
+                          const pos = getEventPosition(meeting.start_time, meeting.end_time, day);
+                          if (!pos) return null;
+
+                          const isFinished = meeting.status === 'Realizada';
+                          const isCancelled = meeting.status === 'Cancelada';
+
+                          return (
+                            <div
+                              key={meeting.id}
+                              onClick={e => {
+                                e.stopPropagation();
+                                setShowOutcomeModal(meeting);
+                              }}
+                              style={{
+                                top: `${pos.top}px`,
+                                height: `${pos.height}px`,
+                              }}
+                              className={`absolute left-1 right-1 pointer-events-auto rounded-xl p-2 cursor-pointer shadow-lg transition-all hover:scale-[1.01] hover:z-30 z-20 flex flex-col justify-between overflow-hidden border ${
+                                isFinished
+                                  ? 'bg-gradient-to-br from-teal-800 to-emerald-900 border-teal-500/60 border-l-4 border-l-teal-300 text-teal-100 shadow-teal-950/50'
+                                  : isCancelled
+                                  ? 'bg-slate-800/90 border-slate-700 text-slate-400 line-through border-l-4 border-l-slate-500'
+                                  : 'bg-gradient-to-br from-indigo-600 to-violet-700 border-indigo-400/60 border-l-4 border-l-indigo-200 text-white shadow-indigo-950/60'
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-center justify-between text-[10px] font-bold">
+                                  <span className="font-mono flex items-center gap-1">
+                                    <Clock className="w-2.5 h-2.5" />
+                                    {format(parseISO(meeting.start_time), 'HH:mm')} - {format(parseISO(meeting.end_time), 'HH:mm')}
+                                  </span>
+                                  <span className={`px-1 py-0.2 rounded text-[8px] font-bold uppercase tracking-wider ${
+                                    isFinished
+                                      ? 'bg-emerald-500/20 text-emerald-300'
+                                      : 'bg-white/20 text-white'
+                                  }`}>
+                                    {meeting.meeting_type}
+                                  </span>
+                                </div>
+                                <div className="font-extrabold text-[11px] truncate mt-0.5 leading-tight">
+                                  {meeting.title}
+                                </div>
+                                {pos.height >= 40 && meeting.leads && (
+                                  <div className="text-[10px] text-indigo-100/90 font-medium truncate flex items-center gap-1 mt-0.5">
+                                    <Building2 className="w-3 h-3 shrink-0 text-indigo-200" />
+                                    <span className="truncate">{meeting.leads.company_name}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {pos.height >= 70 && (
+                                <div className="text-[9px] text-white/80 flex items-center justify-between border-t border-white/10 pt-1 mt-1">
+                                  <span className="truncate">
+                                    Asesor: {meeting.advisor_profile?.full_name?.split(' ')[0] || 'Asesor'}
+                                  </span>
+                                  <span className="font-semibold">{meeting.modality}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Overlay cuando todo el día está bloqueado */}
+                    {fullDayBlock && (
+                      <div className="absolute inset-2 rounded-2xl bg-rose-950/80 backdrop-blur-[2px] border border-rose-500/40 p-4 flex flex-col justify-center items-center text-center space-y-2 z-25 shadow-2xl">
+                        <div className="p-3 rounded-2xl bg-rose-500/20 text-rose-300 border border-rose-500/30 shadow-lg">
+                          <Ban className="w-6 h-6 text-rose-400" />
+                        </div>
+                        <span className="font-extrabold text-xs text-white uppercase tracking-wider">
+                          Día Completo Bloqueado
+                        </span>
+                        <p className="text-xs text-rose-200 font-semibold">{fullDayBlock.title || 'No Disponible'}</p>
+                        {fullDayBlock.notes && (
+                          <p className="text-[10px] text-slate-300 italic max-w-[160px] line-clamp-3">{fullDayBlock.notes}</p>
+                        )}
+                        <span className="text-[10px] text-rose-300/80 font-medium">No se permiten citas hoy</span>
+                        {isAdmin && (
+                          <button
+                            onClick={() => deleteAvailabilityBlockAction(fullDayBlock.id).then(loadSchedule)}
+                            className="mt-2 px-3 py-1.5 rounded-xl bg-rose-500/30 hover:bg-rose-500/50 text-white font-bold text-[11px] border border-rose-500/40 transition-colors shadow-sm"
+                          >
+                            Desbloquear Día
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       ) : (
+        /* VISTA 2: TARJETAS POR DÍA */
         <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
           {weekDays.map((day) => {
             const dayStart = new Date(day);
@@ -683,7 +1135,7 @@ export function AgendaView({ initialRole, userEmail, initialLeadId }: AgendaView
                     </div>
                   )}
 
-                  {/* Horario Semanal Habitual (Solo si el día no está totalmente bloqueado) */}
+                  {/* Horario Semanal Habitual */}
                   {!fullDayBlock && dayWeeklySchedules.map(ws => (
                     <div key={ws.id} className="p-2 rounded-lg text-[11px] border bg-emerald-500/5 border-emerald-500/10 text-emerald-400">
                       <div className="font-semibold flex items-center justify-between">
